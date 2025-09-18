@@ -3,7 +3,7 @@
   "name": "hi-chat-backend",
   "functions": {
     "server.js": {
-      "runtime": "nodejs18.x",
+      "runtime": "@vercel/node@3",
       "maxDuration": 60
     }
   },
