@@ -554,8 +554,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: "https://chatbackend-qqkc.onrender.com",
+    methods: ["GET", "POST"],
+    credentials: true,  
   }
 });
 
