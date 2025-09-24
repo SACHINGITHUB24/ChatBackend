@@ -36,7 +36,7 @@
     "validator": "^13.11.0",
     "sharp": "^0.32.5",
     "uuid": "^9.0.0"
-  }
+  },
   "devDependencies": {
     "nodemon": "^3.0.1",
     "jest": "^29.6.4",
