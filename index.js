@@ -731,12 +731,21 @@ app.post('/api/chats', auth, async (req, res) => {
 
     // For direct chats, create a consistent chatId
     let chatId;
+    // if (type === 'direct') {
+    //   const sortedParticipants = participants.sort();
+    //   chatId = direct_${sortedParticipants.join('_')};
+    // } else {
+    //   chatId = group_${Date.now()}_${Math.random().toString(36).substr(2, 9)};
+    // }
+
+
     if (type === 'direct') {
-      const sortedParticipants = participants.sort();
-      chatId = direct_${sortedParticipants.join('_')};
-    } else {
-      chatId = group_${Date.now()}_${Math.random().toString(36).substr(2, 9)};
-    }
+  const sortedParticipants = participants.sort();
+  chatId = `direct_${sortedParticipants.join('_')}`;
+} else {
+  chatId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 
     res.json({ success: true, chatId, participants, type });
   } catch (error) {
