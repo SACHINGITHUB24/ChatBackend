@@ -16,7 +16,7 @@
     "websocket",
     "webrtc",
     "nodejs",
-    "express",
+    "express"
   ],
   "author": "Hi Chat Team",
   "license": "MIT",
