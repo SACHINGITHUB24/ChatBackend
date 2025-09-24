@@ -620,17 +620,244 @@
 
 
 
-// Ultimate Hi Chat Backend - Socket.IO + WebRTC + Messaging + MongoDB (Rooms Optimized)
+// // Ultimate Hi Chat Backend - Socket.IO + WebRTC + Messaging + MongoDB (Rooms Optimized)
+// const express = require('express');
+// const http = require('http');
+// const { Server } = require('socket.io');
+// const cors = require('cors');
+// const jwt = require('jsonwebtoken');
+// const bcrypt = require('bcryptjs');
+// const mongoose = require('mongoose');
+// require('dotenv').config();
+
+// // MongoDB models
+// const User = require('./models/User');
+// const Message = require('./models/Message');
+// const Group = require('./models/Group');
+
+// const app = express();
+// const server = http.createServer(app);
+
+// const io = new Server(server, {
+//   cors: { origin: '*', methods: ['GET', 'POST'] },
+//   maxHttpBufferSize: 10 * 1024 * 1024, // 10MB
+// });
+
+// const PORT = process.env.PORT || 3001;
+// const JWT_SECRET = process.env.JWT_SECRET || 'hi-chat-ultimate-secret-2024';
+// const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/?retryWrites=true&w=majority&appName=ChatAppData';
+
+// // MongoDB connection
+// async function connectDB() {
+//   try {
+//     await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+//     console.log('✅ MongoDB Connected Successfully');
+//   } catch (error) {
+//     console.error('❌ MongoDB Connection Error:', error.message);
+//     process.exit(1);
+//   }
+// }
+
+// // Initialize system
+// async function initSystem() {
+//   try {
+//     let adminUser = await User.findOne({ username: 'admin' });
+//     if (!adminUser) {
+//       adminUser = new User({
+//         name: 'Administrator',
+//         username: 'admin',
+//         email: 'admin@hichat.com',
+//         password: await bcrypt.hash('admin123', 12),
+//         role: 'admin',
+//         status: 'active',
+//       });
+//       await adminUser.save();
+//       console.log('✅ Admin user created');
+//     }
+
+//     const testUsers = [
+//       { name: 'John Doe', username: 'john', email: 'john@test.com' },
+//       { name: 'Jane Smith', username: 'jane', email: 'jane@test.com' },
+//       { name: 'Bob Wilson', username: 'bob', email: 'bob@test.com' },
+//     ];
+
+//     for (const userData of testUsers) {
+//       const exists = await User.findOne({ username: userData.username });
+//       if (!exists) {
+//         const user = new User({
+//           ...userData,
+//           password: await bcrypt.hash('password123', 12),
+//           role: 'user',
+//           status: 'active',
+//         });
+//         await user.save();
+//         console.log(`✅ Test user created: ${userData.username}`);
+//       }
+//     }
+//   } catch (error) {
+//     console.error('❌ Error initializing system:', error);
+//   }
+// }
+
+// // Middleware
+// app.use(cors({ origin: '*', credentials: true }));
+// app.use(express.json({ limit: '50mb' }));
+
+// // Auth middleware
+// const auth = async (req, res, next) => {
+//   try {
+//     const token = req.header('Authorization')?.replace('Bearer ', '');
+//     if (!token) return res.status(401).json({ error: 'No token' });
+
+//     const decoded = jwt.verify(token, JWT_SECRET);
+//     const user = await User.findById(decoded.userId);
+//     if (!user || user.status !== 'active') return res.status(401).json({ error: 'Invalid user' });
+
+//     req.user = { userId: decoded.userId, username: decoded.username, role: decoded.role };
+//     next();
+//   } catch (error) {
+//     res.status(401).json({ error: 'Invalid token' });
+//   }
+// };
+
+// // API Routes
+// app.get('/api/health', async (req, res) => {
+//   try {
+//     const users = await User.countDocuments();
+//     const messages = await Message.countDocuments();
+//     const groups = await Group.countDocuments();
+//     res.json({ status: 'OK', users, messages, groups, connections: io.sockets.sockets.size });
+//   } catch (error) {
+//     res.status(500).json({ status: 'ERROR', message: error.message });
+//   }
+// });
+
+// app.post('/api/login', async (req, res) => {
+//   try {
+//     const { username, password } = req.body;
+//     const user = await User.findOne({ $or: [{ username }, { email: username }] });
+//     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+//     const valid = await bcrypt.compare(password, user.password);
+//     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+//     user.isOnline = true;
+//     user.lastSeen = new Date();
+//     await user.save();
+
+//     const token = jwt.sign({ userId: user._id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+//     res.json({ success: true, token, user });
+//   } catch (error) {
+//     res.status(500).json({ error: 'Login failed' });
+//   }
+// });
+
+// app.get('/api/users', auth, async (req, res) => {
+//   try {
+//     const users = await User.find({}, '-password');
+//     res.json({ success: true, users });
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to fetch users' });
+//   }
+// });
+
+// // ========== Socket.IO Handlers ==========
+// io.on('connection', (socket) => {
+//   console.log('🔌 Socket connected');
+
+//   let userId = null;
+
+//   socket.on('user_connected', async (msg) => {
+//     userId = msg.userId;
+//     socket.userId = userId;
+
+//     try {
+//       await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
+//     } catch (err) {
+//       console.error(err);
+//     }
+
+//     socket.emit('connected', { userId });
+//     console.log(`👤 User connected: ${msg.username}`);
+//   });
+
+//   socket.on('join_chat', async (msg) => {
+//     const { chatId } = msg;
+//     socket.join(chatId);
+//     socket.emit('chat_joined', { chatId });
+//     console.log(`💬 User joined chat: ${chatId}`);
+//   });
+
+//   socket.on('message', async (msg) => {
+//     const { chatId, content } = msg;
+//     if (!chatId || !content) return;
+
+//     const newMessage = new Message({ chatId, senderId: userId, content, type: 'text', timestamp: new Date(), readBy: [userId] });
+//     await newMessage.save();
+
+//     io.to(chatId).emit('new_message', { ...newMessage.toObject(), senderName: (await User.findById(userId)).name });
+//   });
+
+//   socket.on('typing', (msg) => {
+//     const { chatId, isTyping } = msg;
+//     socket.to(chatId).emit('typing', { userId, isTyping });
+//   });
+
+//   // Calls & WebRTC
+//   socket.on('call_user', (msg) => io.to(msg.targetUserId).emit('incoming_call', { ...msg, callerUserId: userId }));
+//   socket.on('answer_call', (msg) => io.to(msg.targetUserId).emit('call_answered', msg));
+//   socket.on('reject_call', (msg) => io.to(msg.targetUserId).emit('call_rejected', msg));
+//   socket.on('end_call', (msg) => io.to(msg.targetUserId).emit('call_ended', msg));
+//   socket.on('webrtc-signal', (msg) => io.to(msg.targetUserId).emit('webrtc-signal', { ...msg, fromUserId: userId }));
+
+//   socket.on('disconnect', async () => {
+//     if (userId) {
+//       await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
+//       console.log(`👤 User disconnected: ${userId}`);
+//     }
+//   });
+// });
+
+// // Start server
+// async function startServer() {
+//   await connectDB();
+//   await initSystem();
+//   server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// }
+
+// startServer();
+
+// module.exports = { app, server, io };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
-require('dotenv').config();
 
-// MongoDB models
+// Models
 const User = require('./models/User');
 const Message = require('./models/Message');
 const Group = require('./models/Group');
@@ -645,25 +872,25 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'hi-chat-ultimate-secret-2024';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/?retryWrites=true&w=majority&appName=ChatAppData';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hichat';
 
-// MongoDB connection
+// ---------- MongoDB Connection ----------
 async function connectDB() {
   try {
     await mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    console.log('✅ MongoDB Connected Successfully');
-  } catch (error) {
-    console.error('❌ MongoDB Connection Error:', error.message);
+    console.log('✅ MongoDB Connected');
+  } catch (err) {
+    console.error('❌ MongoDB Connection Error:', err.message);
     process.exit(1);
   }
 }
 
-// Initialize system
+// ---------- Initialize Admin & Test Users ----------
 async function initSystem() {
   try {
-    let adminUser = await User.findOne({ username: 'admin' });
-    if (!adminUser) {
-      adminUser = new User({
+    let admin = await User.findOne({ username: 'admin' });
+    if (!admin) {
+      admin = new User({
         name: 'Administrator',
         username: 'admin',
         email: 'admin@hichat.com',
@@ -671,8 +898,8 @@ async function initSystem() {
         role: 'admin',
         status: 'active',
       });
-      await adminUser.save();
-      console.log('✅ Admin user created');
+      await admin.save();
+      console.log('✅ Admin created');
     }
 
     const testUsers = [
@@ -681,29 +908,29 @@ async function initSystem() {
       { name: 'Bob Wilson', username: 'bob', email: 'bob@test.com' },
     ];
 
-    for (const userData of testUsers) {
-      const exists = await User.findOne({ username: userData.username });
+    for (const u of testUsers) {
+      const exists = await User.findOne({ username: u.username });
       if (!exists) {
         const user = new User({
-          ...userData,
+          ...u,
           password: await bcrypt.hash('password123', 12),
           role: 'user',
           status: 'active',
         });
         await user.save();
-        console.log(`✅ Test user created: ${userData.username}`);
+        console.log(`✅ Test user created: ${u.username}`);
       }
     }
-  } catch (error) {
-    console.error('❌ Error initializing system:', error);
+  } catch (err) {
+    console.error('❌ Init Error:', err);
   }
 }
 
-// Middleware
+// ---------- Middleware ----------
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 
-// Auth middleware
+// ---------- Auth Middleware ----------
 const auth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -715,20 +942,20 @@ const auth = async (req, res, next) => {
 
     req.user = { userId: decoded.userId, username: decoded.username, role: decoded.role };
     next();
-  } catch (error) {
+  } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
 
-// API Routes
+// ---------- API Routes ----------
 app.get('/api/health', async (req, res) => {
   try {
     const users = await User.countDocuments();
     const messages = await Message.countDocuments();
     const groups = await Group.countDocuments();
     res.json({ status: 'OK', users, messages, groups, connections: io.sockets.sockets.size });
-  } catch (error) {
-    res.status(500).json({ status: 'ERROR', message: error.message });
+  } catch (err) {
+    res.status(500).json({ status: 'ERROR', message: err.message });
   }
 });
 
@@ -747,7 +974,7 @@ app.post('/api/login', async (req, res) => {
 
     const token = jwt.sign({ userId: user._id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ success: true, token, user });
-  } catch (error) {
+  } catch (err) {
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -756,60 +983,96 @@ app.get('/api/users', auth, async (req, res) => {
   try {
     const users = await User.find({}, '-password');
     res.json({ success: true, users });
-  } catch (error) {
+  } catch (err) {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-// ========== Socket.IO Handlers ==========
+// ---------- Socket.IO Handlers ----------
 io.on('connection', (socket) => {
   console.log('🔌 Socket connected');
-
   let userId = null;
 
+  // User connected
   socket.on('user_connected', async (msg) => {
     userId = msg.userId;
     socket.userId = userId;
-
     try {
       await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
-    } catch (err) {
-      console.error(err);
-    }
-
-    socket.emit('connected', { userId });
-    console.log(`👤 User connected: ${msg.username}`);
+      socket.emit('connected', { userId });
+      console.log(`👤 User connected: ${msg.username}`);
+    } catch (err) { console.error(err); }
   });
 
-  socket.on('join_chat', async (msg) => {
-    const { chatId } = msg;
+  // Join chat room
+  socket.on('join_chat', async ({ chatId }) => {
     socket.join(chatId);
     socket.emit('chat_joined', { chatId });
     console.log(`💬 User joined chat: ${chatId}`);
   });
 
-  socket.on('message', async (msg) => {
-    const { chatId, content } = msg;
+  // Send message
+  socket.on('message', async ({ chatId, content }) => {
     if (!chatId || !content) return;
-
-    const newMessage = new Message({ chatId, senderId: userId, content, type: 'text', timestamp: new Date(), readBy: [userId] });
+    const newMessage = new Message({
+      chatId,
+      senderId: userId,
+      content,
+      type: 'text',
+      timestamp: new Date(),
+      readBy: [userId],
+    });
     await newMessage.save();
 
-    io.to(chatId).emit('new_message', { ...newMessage.toObject(), senderName: (await User.findById(userId)).name });
+    const sender = await User.findById(userId);
+    io.to(chatId).emit('new_message', { ...newMessage.toObject(), senderName: sender.name });
   });
 
-  socket.on('typing', (msg) => {
-    const { chatId, isTyping } = msg;
+  // Typing indicator
+  socket.on('typing', ({ chatId, isTyping }) => {
     socket.to(chatId).emit('typing', { userId, isTyping });
   });
 
-  // Calls & WebRTC
+  // Read message
+  socket.on('read_message', async ({ chatId, messageId }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (!message) return;
+      if (!message.readBy.includes(userId)) {
+        message.readBy.push(userId);
+        await message.save();
+      }
+      io.to(chatId).emit('message_read', { messageId, userId });
+    } catch (err) { console.error(err); }
+  });
+
+  // Create group
+  socket.on('create_group', async ({ name, members }) => {
+    try {
+      if (!name || !members || !members.length) return;
+      const group = new Group({ name, members: [...members, userId], createdBy: userId });
+      await group.save();
+
+      group.members.forEach(id => {
+        const sockets = Array.from(io.sockets.sockets.values()).filter(s => s.userId === id);
+        sockets.forEach(s => s.join(group._id.toString()));
+      });
+
+      group.members.forEach(id => {
+        const sockets = Array.from(io.sockets.sockets.values()).filter(s => s.userId === id);
+        sockets.forEach(s => s.emit('new_group', group));
+      });
+    } catch (err) { console.error(err); }
+  });
+
+  // WebRTC / Calls
   socket.on('call_user', (msg) => io.to(msg.targetUserId).emit('incoming_call', { ...msg, callerUserId: userId }));
   socket.on('answer_call', (msg) => io.to(msg.targetUserId).emit('call_answered', msg));
   socket.on('reject_call', (msg) => io.to(msg.targetUserId).emit('call_rejected', msg));
   socket.on('end_call', (msg) => io.to(msg.targetUserId).emit('call_ended', msg));
   socket.on('webrtc-signal', (msg) => io.to(msg.targetUserId).emit('webrtc-signal', { ...msg, fromUserId: userId }));
 
+  // Disconnect
   socket.on('disconnect', async () => {
     if (userId) {
       await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
@@ -818,7 +1081,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
+// ---------- Start Server ----------
 async function startServer() {
   await connectDB();
   await initSystem();
