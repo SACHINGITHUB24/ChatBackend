@@ -1,29 +1,65 @@
 const mongoose = require('mongoose');
 
 const groupSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  description: { type: String, trim: true },
-  profilePic: { type: String, default: '' },
-  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  admins: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  isActive: { type: Boolean, default: true },
-  lastMessage: {
-    text: { type: String },
-    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    timestamp: { type: Date }
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  description: {
+    type: String,
+    default: ''
+  },
+  profilePic: {
+    type: String,
+    default: null
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  admins: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
   },
   settings: {
-    onlyAdminsCanMessage: { type: Boolean, default: false },
-    onlyAdminsCanAddMembers: { type: Boolean, default: false },
-    allowMemberExit: { type: Boolean, default: true }
+    allowMemberInvite: {
+      type: Boolean,
+      default: true
+    },
+    allowFileSharing: {
+      type: Boolean,
+      default: true
+    },
+    allowVoiceCalls: {
+      type: Boolean,
+      default: true
+    },
+    muteNotifications: {
+      type: Boolean,
+      default: false
+    }
   },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  lastActivity: {
+    type: Date,
+    default: Date.now
+  }
+}, {
+  timestamps: true
 });
 
-// Index for efficient queries
+// Indexes
 groupSchema.index({ members: 1 });
 groupSchema.index({ createdBy: 1 });
+groupSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Group', groupSchema);
