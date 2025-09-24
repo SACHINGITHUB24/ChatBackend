@@ -601,7 +601,9 @@ async function initSystem() {
     }
 
     const userCount = await User.countDocuments();
-    console.log(✅ Initialized MongoDB with ${userCount} users);
+    
+        console.log(`✅ Initialized MongoDB with ${userCount} users`);
+
   } catch (error) {
     console.error('❌ Error initializing system:', error);
   }
@@ -760,7 +762,9 @@ io.on("connection", (socket) => {
       });
       
       socket.emit("connected", { userId });
-      console.log(👤 User connected: ${data.username} (${userId}));
+      // console.log(👤 User connected: ${data.username} (${userId}));
+            console.log(`👤 User connected: ${data.username} (${userId})`);
+
     } catch (error) {
       console.error('Error in user_connected:', error);
     }
@@ -778,7 +782,10 @@ io.on("connection", (socket) => {
       wsStorage.chatRooms.get(chatId).add(userId);
       
       socket.emit("chat_joined", { chatId });
-      console.log(💬 User ${userId} joined chat: ${chatId});
+      // console.log(💬 User ${userId} joined chat: ${chatId});
+
+            console.log(`💬 User ${userId} joined chat: ${chatId}`);
+
     } catch (error) {
       console.error('Error in join_chat:', error);
     }
@@ -827,7 +834,9 @@ io.on("connection", (socket) => {
           lastSeen: new Date() 
         });
         
-        console.log(🔌 User ${userId} disconnected);
+        // console.log(🔌 User ${userId} disconnected);
+            console.log(`🔌 User ${userId} disconnected`);
+
       }
     } catch (error) {
       console.error('Error in disconnect:', error);
@@ -874,7 +883,10 @@ async function handleWSMessage(msg, senderId, socket) {
     // Broadcast to chat room
     socket.to(chatId).emit('new_message', messageData);
     
-    console.log(📨 Message saved and broadcast: ${chatId});
+    // console.log(📨 Message saved and broadcast: ${chatId});
+
+        console.log(`📨 Message saved and broadcast: ${chatId}`);
+
   } catch (error) {
     console.error('Error in handleWSMessage:', error);
   }
@@ -924,7 +936,10 @@ function handleWebRTCSignal(msg, fromUserId) {
     };
     
     broadcastToUser(targetUserId, signalData);
-    console.log(📞 WebRTC signal from ${fromUserId} to ${targetUserId});
+    // console.log(📞 WebRTC signal from ${fromUserId} to ${targetUserId});
+
+        console.log(`📞 WebRTC signal from ${fromUserId} to ${targetUserId}`);
+
   } catch (error) {
     console.error('Error in handleWebRTCSignal:', error);
   }
@@ -946,11 +961,18 @@ async function startServer() {
     await initSystem();
     
     server.listen(PORT, () => {
-      console.log(🚀 Hi Chat Ultimate Backend with MongoDB & Socket.IO running on port ${PORT});
-      console.log(📡 Socket.IO server ready);
-      console.log(🌐 API: http://localhost:${PORT}/api);
-      console.log(💾 MongoDB: Connected and initialized);
-      console.log(🔑 Admin: admin/admin123);
+      // console.log(🚀 Hi Chat Ultimate Backend with MongoDB & Socket.IO running on port ${PORT});
+      // console.log(📡 Socket.IO server ready);
+      // console.log(🌐 API: http://localhost:${PORT}/api);
+      // console.log(💾 MongoDB: Connected and initialized);
+      // console.log(🔑 Admin: admin/admin123);
+
+            console.log(`🚀 Hi Chat Ultimate Backend with MongoDB & Socket.IO running on port ${PORT}`);
+      console.log(`📡 Socket.IO server ready`);
+      console.log(`🌐 API: http://localhost:${PORT}/api`);
+      console.log(`💾 MongoDB: Connected and initialized`);
+      console.log(`🔑 Admin: admin/admin123`);
+
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
