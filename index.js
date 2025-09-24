@@ -596,7 +596,7 @@ async function initSystem() {
           status: 'active'
         });
         await user.save();
-        console.log(✅ Test user created: ${userData.username});
+        console.log(`✅ Test user created: ${userData.username}`);
       }
     }
 
