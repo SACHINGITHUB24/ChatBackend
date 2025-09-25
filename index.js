@@ -1,176 +1,446 @@
+// Ultimate Hi Chat Backend - WebSocket → Socket.IO Migration (FIXED)
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Import DB and models
-const { connectDB } = require('./config/database');
+// MongoDB Models
 const User = require('./models/User');
 const Message = require('./models/Message');
 const Group = require('./models/Group');
 
-// Connect to MongoDB
-connectDB().then(() => console.log('MongoDB connected'))
-           .catch(err => console.error('DB connection error:', err));
-
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET","POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'hi-chat-super-secret-jwt-key-2024-production-ready';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/?retryWrites=true&w=majority&appName=ChatAppData';
 
-// Multer setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname))
-});
-const upload = multer({ storage, limits: { fileSize: 50*1024*1024 } });
-
-// JWT
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-key';
-const authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.sendStatus(401);
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
+// In-memory storage for socket connections and chat rooms
+const wsStorage = {
+  connections: new Map(),
+  chatRooms: new Map(),
+  userSockets: new Map() // userId -> socketId mapping
 };
 
-// ------------------- ROUTES -------------------
+// ===== MongoDB Connection =====
+async function connectDB() {
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('✅ MongoDB Connected Successfully');
+  } catch (error) {
+    console.error('❌ MongoDB Connection Error:', error.message);
+    process.exit(1);
+  }
+}
+
+// ===== System Initialization =====
+async function initSystem() {
+  try {
+    // Admin user
+    let adminUser = await User.findOne({ username: 'admin' });
+    if (!adminUser) {
+      adminUser = new User({
+        name: 'Administrator',
+        username: 'admin',
+        email: 'admin@hichat.com',
+        password: await bcrypt.hash('admin123', 12),
+        role: 'admin',
+        status: 'active'
+      });
+      await adminUser.save();
+      console.log('✅ Admin user created');
+    }
+
+    // Test users
+    const testUsers = [
+      { name: 'John Doe', username: 'john', email: 'john@test.com' },
+      { name: 'Jane Smith', username: 'jane', email: 'jane@test.com' },
+      { name: 'Bob Wilson', username: 'bob', email: 'bob@test.com' }
+    ];
+    
+    for (const userData of testUsers) {
+      const existingUser = await User.findOne({ username: userData.username });
+      if (!existingUser) {
+        const user = new User({
+          ...userData,
+          password: await bcrypt.hash('password123', 12),
+          role: 'user',
+          status: 'active'
+        });
+        await user.save();
+        console.log(`✅ Test user created: ${userData.username}`);
+      }
+    }
+
+    const userCount = await User.countDocuments();
+    console.log(`✅ Initialized MongoDB with ${userCount} users`);
+  } catch (error) {
+    console.error('❌ Error initializing system:', error);
+  }
+}
+
+// ===== Middleware =====
+app.use(cors({ origin: "*", credentials: true }));
+app.use(express.json({ limit: '50mb' }));
+
+// ===== Auth Middleware =====
+const auth = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token' });
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user || user.status !== 'active') return res.status(401).json({ error: 'Invalid user' });
+
+    req.user = { userId: decoded.userId, username: decoded.username, role: decoded.role };
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// ===== API Routes =====
 
 // Health check
-app.get('/api/health', async (req,res)=>{
-  try{
+app.get('/api/health', async (req, res) => {
+  try {
     const userCount = await User.countDocuments();
-    res.json({ status:'OK', userCount, timestamp:new Date() });
-  } catch(e){
-    res.status(500).json({ status:'ERROR', message:e.message });
+    const messageCount = await Message.countDocuments();
+    const groupCount = await Group.countDocuments();
+    res.json({
+      status: 'OK',
+      message: 'Hi Chat Ultimate Backend with MongoDB & Socket.IO',
+      version: '2.2.0',
+      database: 'MongoDB Connected',
+      users: userCount,
+      messages: messageCount,
+      groups: groupCount,
+      connections: wsStorage.connections.size,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'ERROR', message: 'Database connection failed', error: error.message });
   }
 });
 
 // Login
-app.post('/api/login', async (req,res)=>{
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
-  if(!user) return res.status(400).json({ error:'Invalid credentials' });
-  const valid = await bcrypt.compare(password,user.password);
-  if(!valid) return res.status(400).json({ error:'Invalid credentials' });
-  user.isOnline = true; user.lastSeen = new Date(); await user.save();
-  const token = jwt.sign({ userId:user._id, username:user.username }, JWT_SECRET);
-  res.json({ token, user: { id:user._id, username:user.username, name:user.name, profilePic:user.profilePic } });
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ 
+      $or: [{ username: username.toLowerCase() }, { email: username.toLowerCase() }] 
+    });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
+
+    user.isOnline = true;
+    user.lastSeen = new Date();
+    await user.save();
+
+    const token = jwt.sign(
+      { userId: user._id, username: user.username, role: user.role }, 
+      JWT_SECRET, 
+      { expiresIn: '30d' }
+    );
+    
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        username: user.username, 
+        email: user.email, 
+        role: user.role, 
+        profilePic: user.profilePic, 
+        isOnline: user.isOnline 
+      } 
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
-// ------------------- SOCKET.IO -------------------
+// Fetch all users
+app.get('/api/users', auth, async (req, res) => {
+  try {
+    const users = await User.find({}, '-password').lean();
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 
-const connectedUsers = new Map(); // socketId -> { userId, username }
-const activeCalls = new Map(); // callId -> { caller, callee, status }
+// Get messages for a chat
+app.get('/api/messages/:chatId', auth, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const messages = await Message.find({ chatId })
+      .populate('senderId', 'name username profilePic')
+      .sort({ timestamp: 1 })
+      .limit(100)
+      .lean();
+    
+    res.json({ success: true, messages });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
 
-io.on('connection', socket => {
-  console.log('Connected:', socket.id);
+// Create or get chat
+app.post('/api/chats', auth, async (req, res) => {
+  try {
+    const { participants, type = 'direct' } = req.body;
+    if (!participants || participants.length < 2) {
+      return res.status(400).json({ error: 'Need at least 2 participants' });
+    }
 
-  socket.on('user_connected', async ({ token }) => {
-    try{
-      const payload = jwt.verify(token, JWT_SECRET);
-      const user = await User.findById(payload.userId);
-      if(!user) return;
-      connectedUsers.set(socket.id, { userId:user._id.toString(), username:user.username });
-      await User.findByIdAndUpdate(user._id,{ isOnline:true });
-      socket.broadcast.emit('user_online', { userId:user._id, username:user.username });
-      console.log(`User connected: ${user.username}`);
-    }catch(e){ console.error(e); }
-  });
+    // For direct chats, create a consistent chatId
+    let chatId;
+    if (type === 'direct') {
+      const sortedParticipants = participants.sort();
+      chatId = `direct_${sortedParticipants.join('_')}`;
+    } else {
+      chatId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
 
-  // Send message
-  socket.on('send_message', async ({ chatId, text, groupId }) => {
-    try{
-      const userData = connectedUsers.get(socket.id);
-      if(!userData) return;
-      const message = new Message({
-        chatId,
-        senderId: mongoose.Types.ObjectId(userData.userId),
-        text,
-        type:'text',
-        groupId: groupId ? mongoose.Types.ObjectId(groupId) : undefined,
-        timestamp: new Date()
+    res.json({ success: true, chatId, participants, type });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create chat' });
+  }
+});
+
+// ===== Socket.IO Event Handlers =====
+io.on("connection", (socket) => {
+  console.log("🔌 Socket.IO connected:", socket.id);
+  let userId = null;
+
+  // User connection
+  socket.on("user_connected", async (data) => {
+    try {
+      userId = data.userId;
+      wsStorage.connections.set(userId, socket);
+      wsStorage.userSockets.set(socket.id, userId);
+
+      await User.findByIdAndUpdate(userId, { 
+        isOnline: true, 
+        lastSeen: new Date() 
       });
-      await message.save();
-      await message.populate('senderId','name username profilePic');
-      if(groupId) io.to(groupId).emit('new_message', message);
-      else io.emit('new_message', message);
-    }catch(e){ console.error('Send message error:', e); }
+      
+      socket.emit("connected", { userId });
+      console.log(`👤 User connected: ${data.username} (${userId})`);
+    } catch (error) {
+      console.error('Error in user_connected:', error);
+    }
   });
 
-  // Join group
-  socket.on('join_group', (groupId)=>{ socket.join(groupId); console.log(socket.id,'joined',groupId); });
+  // Join chat room
+  socket.on("join_chat", (data) => {
+    try {
+      const { chatId } = data;
+      socket.join(chatId);
+      
+      if (!wsStorage.chatRooms.has(chatId)) {
+        wsStorage.chatRooms.set(chatId, new Set());
+      }
+      wsStorage.chatRooms.get(chatId).add(userId);
+      
+      socket.emit("chat_joined", { chatId });
+      console.log(`💬 User ${userId} joined chat: ${chatId}`);
+    } catch (error) {
+      console.error('Error in join_chat:', error);
+    }
+  });
 
-  // Typing indicator
-  socket.on('typing', ({ chatId, isTyping }) => {
-    const userData = connectedUsers.get(socket.id);
-    if(!userData) return;
-    socket.broadcast.emit('typing',{ chatId, userId:userData.userId, isTyping });
+  // Handle messages
+  socket.on("message", async (msg) => {
+    try {
+      await handleWSMessage(msg, userId, socket);
+    } catch (error) {
+      console.error('Error handling message:', error);
+    }
+  });
+
+  // Typing indicators
+  socket.on("typing", (msg) => {
+    try {
+      socket.to(msg.chatId).emit("typing", { 
+        username: msg.username, 
+        chatId: msg.chatId,
+        userId: userId
+      });
+    } catch (error) {
+      console.error('Error in typing:', error);
+    }
   });
 
   // WebRTC signaling
-  socket.on('webrtc-signal', data => {
-    const { type, to, from, callId, signal } = data;
-    const targetSocket = Array.from(connectedUsers.entries()).find(([id,u])=>u.userId===to)?.[0];
-    if(!targetSocket) return;
-    switch(type){
-      case 'call-offer':
-        activeCalls.set(callId,{ caller:from, callee:to, status:'calling' });
-        io.to(targetSocket).emit('webrtc-signal',{ type:'call-offer', data });
-        break;
-      case 'call-answer':
-        activeCalls.set(callId,{ ...activeCalls.get(callId), status:'connected' });
-        io.to(targetSocket).emit('webrtc-signal',{ type:'call-answer', data });
-        break;
-      case 'ice-candidate': io.to(targetSocket).emit('webrtc-signal',{ type:'ice-candidate', data }); break;
-      case 'call-end': case 'call-reject':
-        io.to(targetSocket).emit('webrtc-signal',{ type, data });
-        activeCalls.delete(callId); break;
+  socket.on("webrtc-signal", (msg) => {
+    try {
+      handleWebRTCSignal(msg, userId);
+    } catch (error) {
+      console.error('Error in webrtc-signal:', error);
     }
   });
 
-  socket.on('disconnect', async () => {
-    const user = connectedUsers.get(socket.id);
-    if(user){
-      await User.findByIdAndUpdate(user.userId,{ isOnline:false, lastSeen:new Date() });
-      socket.broadcast.emit('user_offline',{ userId:user.userId });
-      connectedUsers.delete(socket.id);
-
-      // End active calls if disconnected
-      for(const [callId,call] of activeCalls.entries()){
-        if(call.caller===user.userId || call.callee===user.userId){
-          const otherId = call.caller===user.userId?call.callee:call.caller;
-          const otherSocket = Array.from(connectedUsers.entries()).find(([id,u])=>u.userId===otherId)?.[0];
-          if(otherSocket) io.to(otherSocket).emit('webrtc-signal',{ type:'call-end', data:{ callId, reason:'user_disconnected' } });
-          activeCalls.delete(callId);
-        }
+  // Disconnect handler
+  socket.on("disconnect", async () => {
+    try {
+      if (userId) {
+        wsStorage.connections.delete(userId);
+        wsStorage.userSockets.delete(socket.id);
+        
+        await User.findByIdAndUpdate(userId, { 
+          isOnline: false, 
+          lastSeen: new Date() 
+        });
+        
+        console.log(`🔌 User ${userId} disconnected`);
       }
+    } catch (error) {
+      console.error('Error in disconnect:', error);
     }
-    console.log('Disconnected:', socket.id);
   });
 });
 
-// ------------------- SERVER -------------------
+// ===== Message Handler =====
+async function handleWSMessage(msg, senderId, socket) {
+  try {
+    const { chatId, message, type = 'text', metadata = {} } = msg;
+    
+    if (!chatId || !message || !senderId) {
+      console.error('Invalid message data:', { chatId, message, senderId });
+      return;
+    }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT,()=>console.log(`Server running on port ${PORT}`));
+    // Save message to MongoDB
+    const newMessage = new Message({
+      chatId,
+      senderId,
+      text: message,
+      type,
+      metadata,
+      timestamp: new Date()
+    });
+    
+    await newMessage.save();
+    
+    // Populate sender info for broadcasting
+    await newMessage.populate('senderId', 'name username profilePic');
+    
+    const messageData = {
+      type: 'new_message',
+      id: newMessage._id,
+      chatId: newMessage.chatId,
+      senderId: newMessage.senderId,
+      content: newMessage.text,
+      messageType: newMessage.type,
+      timestamp: newMessage.timestamp,
+      metadata: newMessage.metadata
+    };
+
+    // Broadcast to chat room
+    socket.to(chatId).emit('new_message', messageData);
+    
+    console.log(`📨 Message saved and broadcast: ${chatId}`);
+  } catch (error) {
+    console.error('Error in handleWSMessage:', error);
+  }
+}
+
+// ===== Broadcast Functions =====
+function broadcastToChat(chatId, message, excludeUserId = null) {
+  try {
+    const participants = wsStorage.chatRooms.get(chatId);
+    if (participants) {
+      participants.forEach(uid => {
+        if (uid !== excludeUserId) {
+          const sock = wsStorage.connections.get(uid);
+          if (sock) {
+            sock.emit(message.type || 'message', message);
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error in broadcastToChat:', error);
+  }
+}
+
+function broadcastToUser(userId, message) {
+  try {
+    const sock = wsStorage.connections.get(userId);
+    if (sock) {
+      sock.emit(message.type || 'message', message);
+    }
+  } catch (error) {
+    console.error('Error in broadcastToUser:', error);
+  }
+}
+
+// ===== WebRTC Signal Handler =====
+function handleWebRTCSignal(msg, fromUserId) {
+  try {
+    const { targetUserId, signal, callId, type } = msg;
+    
+    const signalData = {
+      type: 'webrtc-signal',
+      signal,
+      callId,
+      fromUserId,
+      signalType: type
+    };
+    
+    broadcastToUser(targetUserId, signalData);
+    console.log(`📞 WebRTC signal from ${fromUserId} to ${targetUserId}`);
+  } catch (error) {
+    console.error('Error in handleWebRTCSignal:', error);
+  }
+}
+
+// ===== Error Handling =====
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled Rejection:', error);
+});
+
+// ===== Start Server =====
+async function startServer() {
+  try {
+    await connectDB();
+    await initSystem();
+    
+    server.listen(PORT, () => {
+      console.log(`🚀 Hi Chat Ultimate Backend with MongoDB & Socket.IO running on port ${PORT}`);
+      console.log(`📡 Socket.IO server ready`);
+      console.log(`🌐 API: http://localhost:${PORT}/api`);
+      console.log(`💾 MongoDB: Connected and initialized`);
+      console.log(`🔑 Admin: admin/admin123`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+module.exports = { app, server, io };
