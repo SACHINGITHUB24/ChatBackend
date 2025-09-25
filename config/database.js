@@ -16,7 +16,7 @@ const connectDB = async () => {
 
 const testConnection = async () => {
   try {
-    await mongoose.connection.db.admin().ping();
+    await mongoose.connection.db.admin().ping();mc
     return true;
   } catch (error) {
     console.error('Database ping failed:', error);
