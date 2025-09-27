@@ -1,41 +1,42 @@
 {
-  "name": "hi-chat-backend",
+  "name": "hi-chat-zegocloud-backend",
   "version": "1.0.0",
-  "description": "Backend server for Hi Chat application with real-time messaging, voice calls, and file sharing",
-  "main": "server-socketio-complete.js",
+  "description": "Hi Chat Backend with ZEGOCLOUD token generation for Render deployment",
+  "main": "server-zegocloud.js",
   "scripts": {
-    "start": "node server-socketio-complete.js",
-    "dev": "nodemon server-socketio-complete.js",
+    "start": "node server-zegocloud.js",
+    "dev": "nodemon server-zegocloud.js",
     "test": "jest",
     "lint": "eslint .",
-    "seed": "node scripts/seed.js"
+    "build": "echo 'No build step required'",
+    "postinstall": "echo 'Dependencies installed successfully'"
   },
   "keywords": [
     "chat",
     "messaging",
-    "websocket",
-    "webrtc",
+    "zegocloud",
+    "token-generation",
     "nodejs",
-    "express"
+    "express",
+    "render"
   ],
   "author": "Hi Chat Team",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
     "cors": "^2.8.5",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "dotenv": "^16.3.1",
-    "ws": "^8.14.2",
     "mongoose": "^7.5.0",
     "express-rate-limit": "^6.10.0",
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
     "validator": "^13.11.0",
     "sharp": "^0.32.5",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "crypto": "^1.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
@@ -44,15 +45,15 @@
     "eslint": "^8.47.0"
   },
   "engines": {
-    "node": ">=16.0.0",
+    "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/hi-chat-backend.git"
+    "url": "https://github.com/your-username/hi-chat-zegocloud-backend.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/hi-chat-backend/issues"
+    "url": "https://github.com/your-username/hi-chat-zegocloud-backend/issues"
   },
-  "homepage": "https://github.com/your-username/hi-chat-backend#readme"
+  "homepage": "https://github.com/your-username/hi-chat-zegocloud-backend#readme"
 }

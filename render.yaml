@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: hi-chat-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ZEGO_APP_ID
+        value: 640953410
+      - key: ZEGO_SERVER_SECRET
+        value: 3127e2f085cf98a0118601e8f6ad13e7
+      - key: MONGODB_URI
+        fromDatabase:
+          name: hi-chat-db
+          property: connectionString
+    healthCheckPath: /api/health
+    
+  - type: pserv
+    name: hi-chat-db
+    env: mongodb
+    plan: free
+    ipAllowList: []
