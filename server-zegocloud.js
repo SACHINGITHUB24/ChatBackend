@@ -64,7 +64,7 @@ const ZEGOCLOUD_CONFIG = {
 // 🗄️ DATABASE CONNECTION
 // ========================================
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hichat';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/?retryWrites=true&w=majority&appName=ChatAppData';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
