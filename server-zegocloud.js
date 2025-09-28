@@ -64,7 +64,7 @@ const ZEGOCLOUD_CONFIG = {
 // 🗄️ DATABASE CONNECTION
 // ========================================
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/?retryWrites=true&w=majority&appName=ChatAppData';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/ChatAppData?retryWrites=true&w=majority&appName=ChatAppData';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
@@ -443,12 +443,766 @@ app.get('/api/groups', authenticateToken, async (req, res) => {
   try {
     const groups = await Group.find({
       members: req.user.userId
-    }).populate('members', 'name username profilePic');
+    }).populate('members', 'name username profilePic isOnline lastSeen');
     
     res.json(groups);
   } catch (error) {
     console.error('❌ Get groups error:', error);
     res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+// Update Group
+app.put('/api/groups/:groupId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { name, description, profilePic } = req.body;
+    
+    // Check if user is admin of the group
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    if (!group.admins.includes(req.user.userId)) {
+      return res.status(403).json({ error: 'Only group admins can update group details' });
+    }
+    
+    // Update group
+    const updatedGroup = await Group.findByIdAndUpdate(
+      groupId,
+      {
+        name: name || group.name,
+        description: description !== undefined ? description : group.description,
+        profilePic: profilePic !== undefined ? profilePic : group.profilePic,
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).populate('members', 'name username profilePic isOnline lastSeen')
+     .populate('admins', 'name username profilePic');
+    
+    console.log(`✅ Group updated: ${updatedGroup.name}`);
+    
+    res.json({
+      message: 'Group updated successfully',
+      group: updatedGroup
+    });
+    
+  } catch (error) {
+    console.error('❌ Update group error:', error);
+    res.status(500).json({ error: 'Failed to update group' });
+  }
+});
+
+// Delete Group
+app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    
+    // Check if user is admin of the group
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    if (!group.admins.includes(req.user.userId)) {
+      return res.status(403).json({ error: 'Only group admins can delete the group' });
+    }
+    
+    // Delete all messages in the group
+    await Message.deleteMany({ group: groupId });
+    
+    // Delete the group
+    await Group.findByIdAndDelete(groupId);
+    
+    console.log(`✅ Group deleted: ${group.name}`);
+    
+    res.json({
+      message: 'Group deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Delete group error:', error);
+    res.status(500).json({ error: 'Failed to delete group' });
+  }
+});
+
+// Add Member to Group
+app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { userId } = req.body;
+    
+    // Check if user is admin of the group
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    if (!group.admins.includes(req.user.userId)) {
+      return res.status(403).json({ error: 'Only group admins can add members' });
+    }
+    
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if user is already a member
+    if (group.members.includes(userId)) {
+      return res.status(400).json({ error: 'User is already a member' });
+    }
+    
+    // Add member
+    group.members.push(userId);
+    group.updatedAt = new Date();
+    await group.save();
+    
+    const updatedGroup = await Group.findById(groupId)
+      .populate('members', 'name username profilePic isOnline lastSeen')
+      .populate('admins', 'name username profilePic');
+    
+    console.log(`✅ Member added to group: ${user.username} -> ${group.name}`);
+    
+    res.json({
+      message: 'Member added successfully',
+      group: updatedGroup
+    });
+    
+  } catch (error) {
+    console.error('❌ Add member error:', error);
+    res.status(500).json({ error: 'Failed to add member' });
+  }
+});
+
+// Remove Member from Group
+app.delete('/api/groups/:groupId/members/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId, userId } = req.params;
+    
+    // Check if user is admin of the group
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    if (!group.admins.includes(req.user.userId)) {
+      return res.status(403).json({ error: 'Only group admins can remove members' });
+    }
+    
+    // Don't allow removing the group creator
+    if (group.createdBy.toString() === userId) {
+      return res.status(400).json({ error: 'Cannot remove group creator' });
+    }
+    
+    // Remove member
+    group.members = group.members.filter(member => member.toString() !== userId);
+    group.admins = group.admins.filter(admin => admin.toString() !== userId);
+    group.updatedAt = new Date();
+    await group.save();
+    
+    const updatedGroup = await Group.findById(groupId)
+      .populate('members', 'name username profilePic isOnline lastSeen')
+      .populate('admins', 'name username profilePic');
+    
+    console.log(`✅ Member removed from group: ${userId} -> ${group.name}`);
+    
+    res.json({
+      message: 'Member removed successfully',
+      group: updatedGroup
+    });
+    
+  } catch (error) {
+    console.error('❌ Remove member error:', error);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// Admin: Create Admin User (One-time setup)
+app.post('/api/admin/create-admin', async (req, res) => {
+  try {
+    // Check if any admin already exists
+    const existingAdmin = await User.findOne({ role: 'admin' });
+    if (existingAdmin) {
+      return res.status(400).json({ error: 'Admin user already exists' });
+    }
+    
+    const { name, username, email, password } = req.body;
+    
+    // Validation
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Check if user exists
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }]
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create admin user
+    const adminUser = new User({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      role: 'admin',
+      zegoUserId: `zego_admin_${new mongoose.Types.ObjectId()}`
+    });
+    
+    await adminUser.save();
+    
+    console.log(`✅ Admin user created: ${username}`);
+    
+    res.status(201).json({
+      message: 'Admin user created successfully',
+      user: {
+        id: adminUser._id,
+        name: adminUser.name,
+        username: adminUser.username,
+        email: adminUser.email,
+        role: adminUser.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Admin creation error:', error);
+    res.status(500).json({ error: 'Admin creation failed' });
+  }
+});
+
+// Admin: Create User (CRUD)
+app.post('/api/admin/users', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { name, username, email, password, role = 'user', profilePic } = req.body;
+    
+    // Validation
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Check if user exists
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }]
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create user
+    const user = new User({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      role,
+      profilePic: profilePic || '',
+      zegoUserId: `zego_${new mongoose.Types.ObjectId()}`
+    });
+    
+    await user.save();
+    
+    console.log(`✅ User created by admin: ${username}`);
+    
+    res.status(201).json({
+      message: 'User created successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        profilePic: user.profilePic,
+        zegoUserId: user.zegoUserId
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Admin user creation error:', error);
+    res.status(500).json({ error: 'User creation failed' });
+  }
+});
+
+// Admin: Update User
+app.put('/api/admin/users/:userId', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { userId } = req.params;
+    const updates = req.body;
+    
+    // Don't allow password updates through this endpoint
+    delete updates.password;
+    updates.updatedAt = new Date();
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updates,
+      { new: true, select: '-password' }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`✅ User updated by admin: ${user.username}`);
+    
+    res.json({
+      message: 'User updated successfully',
+      user
+    });
+    
+  } catch (error) {
+    console.error('❌ Admin user update error:', error);
+    res.status(500).json({ error: 'User update failed' });
+  }
+});
+
+// Admin: Delete User
+app.delete('/api/admin/users/:userId', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { userId } = req.params;
+    
+    // Don't allow admin to delete themselves
+    if (userId === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    
+    const user = await User.findByIdAndDelete(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`✅ User deleted by admin: ${user.username}`);
+    
+    res.json({
+      message: 'User deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Admin user deletion error:', error);
+    res.status(500).json({ error: 'User deletion failed' });
+  }
+});
+
+// Update User Online Status
+app.put('/api/user/online-status', authenticateToken, async (req, res) => {
+  try {
+    const { isOnline, lastSeen } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      req.user.userId,
+      { 
+        isOnline: isOnline,
+        lastSeen: lastSeen ? new Date(lastSeen) : new Date(),
+        updatedAt: new Date()
+      },
+      { new: true, select: '-password' }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      message: 'Online status updated',
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen
+    });
+    
+  } catch (error) {
+    console.error('❌ Online status update error:', error);
+    res.status(500).json({ error: 'Failed to update online status' });
+  }
+});
+
+// Get User Online Status
+app.get('/api/user/:userId/online-status', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId, 'isOnline lastSeen');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen
+    });
+    
+  } catch (error) {
+    console.error('❌ Get online status error:', error);
+    res.status(500).json({ error: 'Failed to get online status' });
+  }
+});
+
+// Get All Users (for chat/contact list)
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await User.find(
+      { _id: { $ne: req.user.userId } }, // Exclude current user
+      'name username email profilePic isOnline lastSeen role createdAt'
+    ).sort({ name: 1 });
+    
+    res.json(users);
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// ========================================
+// 💬 MESSAGING ENDPOINTS
+// ========================================
+
+// Get Chat Messages
+app.get('/api/messages/:chatId', authenticateToken, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+    
+    const skip = (page - 1) * limit;
+    
+    // Get messages for direct chat or group
+    const messages = await Message.find({
+      $or: [
+        { recipient: chatId, sender: req.user.userId },
+        { sender: chatId, recipient: req.user.userId },
+        { group: chatId }
+      ]
+    })
+    .populate('sender', 'name username profilePic')
+    .populate('recipient', 'name username profilePic')
+    .populate('group', 'name')
+    .sort({ timestamp: -1 })
+    .limit(parseInt(limit))
+    .skip(skip);
+    
+    res.json(messages.reverse()); // Return in chronological order
+  } catch (error) {
+    console.error('❌ Get messages error:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Send Message
+app.post('/api/messages', authenticateToken, async (req, res) => {
+  try {
+    const { recipientId, groupId, content, messageType = 'text', zegoMessageId } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+    
+    if (!recipientId && !groupId) {
+      return res.status(400).json({ error: 'Either recipientId or groupId is required' });
+    }
+    
+    // Create message
+    const message = new Message({
+      sender: req.user.userId,
+      recipient: recipientId || null,
+      group: groupId || null,
+      content,
+      messageType,
+      zegoMessageId,
+      timestamp: new Date()
+    });
+    
+    await message.save();
+    
+    // Populate sender info
+    await message.populate('sender', 'name username profilePic');
+    if (recipientId) {
+      await message.populate('recipient', 'name username profilePic');
+    }
+    if (groupId) {
+      await message.populate('group', 'name');
+    }
+    
+    console.log(`✅ Message sent: ${req.user.userId} -> ${recipientId || groupId}`);
+    
+    res.status(201).json({
+      message: 'Message sent successfully',
+      data: message
+    });
+    
+  } catch (error) {
+    console.error('❌ Send message error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Get Chat List (Recent conversations)
+app.get('/api/chats', authenticateToken, async (req, res) => {
+  try {
+    // Get recent messages for the user
+    const recentMessages = await Message.aggregate([
+      {
+        $match: {
+          $or: [
+            { sender: req.user.userId },
+            { recipient: req.user.userId },
+            { 
+              group: { $in: await Group.find({ members: req.user.userId }).distinct('_id') }
+            }
+          ]
+        }
+      },
+      {
+        $sort: { timestamp: -1 }
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $ne: ["$group", null] },
+              "$group",
+              {
+                $cond: [
+                  { $eq: ["$sender", req.user.userId] },
+                  "$recipient",
+                  "$sender"
+                ]
+              }
+            ]
+          },
+          lastMessage: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $sort: { "lastMessage.timestamp": -1 }
+      }
+    ]);
+    
+    // Populate user and group details
+    const chats = [];
+    for (const item of recentMessages) {
+      const lastMessage = item.lastMessage;
+      let chatInfo = {};
+      
+      if (lastMessage.group) {
+        // Group chat
+        const group = await Group.findById(lastMessage.group)
+          .populate('members', 'name username profilePic isOnline');
+        if (group) {
+          chatInfo = {
+            id: group._id,
+            name: group.name,
+            type: 'group',
+            profilePic: group.profilePic,
+            lastMessage: lastMessage.content,
+            timestamp: lastMessage.timestamp,
+            members: group.members,
+            unreadCount: 0 // TODO: Implement unread count
+          };
+        }
+      } else {
+        // Direct chat
+        const otherUserId = lastMessage.sender.toString() === req.user.userId 
+          ? lastMessage.recipient 
+          : lastMessage.sender;
+        const otherUser = await User.findById(otherUserId, 'name username profilePic isOnline lastSeen');
+        if (otherUser) {
+          chatInfo = {
+            id: otherUser._id,
+            name: otherUser.name,
+            username: otherUser.username,
+            type: 'direct',
+            profilePic: otherUser.profilePic,
+            isOnline: otherUser.isOnline,
+            lastSeen: otherUser.lastSeen,
+            lastMessage: lastMessage.content,
+            timestamp: lastMessage.timestamp,
+            unreadCount: 0 // TODO: Implement unread count
+          };
+        }
+      }
+      
+      if (Object.keys(chatInfo).length > 0) {
+        chats.push(chatInfo);
+      }
+    }
+    
+    res.json(chats);
+  } catch (error) {
+    console.error('❌ Get chats error:', error);
+    res.status(500).json({ error: 'Failed to fetch chats' });
+  }
+});
+
+// ========================================
+// 📞 CALLING ENDPOINTS
+// ========================================
+
+// Initiate Call
+app.post('/api/calls/initiate', authenticateToken, async (req, res) => {
+  try {
+    const { recipientId, callType = 'voice', groupId } = req.body;
+    
+    if (!recipientId && !groupId) {
+      return res.status(400).json({ error: 'Either recipientId or groupId is required' });
+    }
+    
+    // Generate unique call ID
+    const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Get caller info
+    const caller = await User.findById(req.user.userId, 'name username profilePic');
+    
+    let callData = {
+      callId,
+      callerId: req.user.userId,
+      callerName: caller.name,
+      callerProfilePic: caller.profilePic,
+      callType, // 'voice' or 'video'
+      status: 'initiated',
+      timestamp: new Date()
+    };
+    
+    if (recipientId) {
+      // Direct call
+      const recipient = await User.findById(recipientId, 'name username profilePic isOnline');
+      if (!recipient) {
+        return res.status(404).json({ error: 'Recipient not found' });
+      }
+      
+      callData.recipientId = recipientId;
+      callData.recipientName = recipient.name;
+      callData.recipientProfilePic = recipient.profilePic;
+      callData.recipientOnline = recipient.isOnline;
+    } else {
+      // Group call
+      const group = await Group.findById(groupId).populate('members', 'name username profilePic isOnline');
+      if (!group) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+      
+      callData.groupId = groupId;
+      callData.groupName = group.name;
+      callData.members = group.members;
+    }
+    
+    console.log(`✅ Call initiated: ${callId} by ${caller.name}`);
+    
+    res.json({
+      message: 'Call initiated successfully',
+      call: callData
+    });
+    
+  } catch (error) {
+    console.error('❌ Initiate call error:', error);
+    res.status(500).json({ error: 'Failed to initiate call' });
+  }
+});
+
+// End Call
+app.post('/api/calls/:callId/end', authenticateToken, async (req, res) => {
+  try {
+    const { callId } = req.params;
+    const { duration = 0, reason = 'ended' } = req.body;
+    
+    console.log(`✅ Call ended: ${callId} by ${req.user.userId}, duration: ${duration}s`);
+    
+    res.json({
+      message: 'Call ended successfully',
+      callId,
+      duration,
+      reason,
+      endedBy: req.user.userId,
+      timestamp: new Date()
+    });
+    
+  } catch (error) {
+    console.error('❌ End call error:', error);
+    res.status(500).json({ error: 'Failed to end call' });
+  }
+});
+
+// Get Call History
+app.get('/api/calls/history', authenticateToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    // For now, return empty array as call history is managed by ZEGOCLOUD
+    // In a full implementation, you'd store call records in database
+    const callHistory = [];
+    
+    res.json({
+      calls: callHistory,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: 0
+    });
+    
+  } catch (error) {
+    console.error('❌ Get call history error:', error);
+    res.status(500).json({ error: 'Failed to fetch call history' });
+  }
+});
+
+// Admin: Update User Role
+app.put('/api/admin/users/:userId/role', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { userId } = req.params;
+    const { role } = req.body;
+    
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { role, updatedAt: new Date() },
+      { new: true, select: '-password' }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`✅ User role updated: ${user.username} -> ${role}`);
+    
+    res.json({
+      message: 'User role updated successfully',
+      user
+    });
+    
+  } catch (error) {
+    console.error('❌ Role update error:', error);
+    res.status(500).json({ error: 'Role update failed' });
   }
 });
 
