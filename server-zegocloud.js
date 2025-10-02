@@ -28,22 +28,12 @@ app.use(compression());
 app.use(morgan('combined'));
 
 // Rate limiting
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-//   message: 'Too many requests from this IP, please try again later.'
-// });
-// app.use('/api/', limiter);
-
-
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: Number.MAX_SAFE_INTEGER, // practically unlimited requests
+  max: 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
-
 app.use('/api/', limiter);
-
 
 // CORS configuration
 app.use(cors({
@@ -61,6 +51,48 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static('uploads'));
 
 // ========================================
+// 📁 FILE UPLOAD CONFIGURATION
+// ========================================
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, 'uploads');
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileExtension = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + fileExtension);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images and common file types
+    const allowedTypes = /jpeg|jpg|png|gif|webp|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images and documents are allowed.'));
+    }
+  }
+});
+
+// ========================================
 // 🔑 ZEGOCLOUD CONFIGURATION
 // ========================================
 
@@ -74,7 +106,7 @@ const ZEGOCLOUD_CONFIG = {
 // 🗄️ DATABASE CONNECTION
 // ========================================
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://ChatAppData:CHATAPPDATA@chatappdata.ua6pnti.mongodb.net/ChatAppData?retryWrites=true&w=majority&appName=ChatAppData';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hichat';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
@@ -266,6 +298,103 @@ app.post('/api/getZegoToken', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('❌ Token generation error:', error);
     res.status(500).json({ error: 'Token generation failed' });
+  }
+});
+
+// ========================================
+// 📁 FILE UPLOAD ENDPOINTS
+// ========================================
+
+// File Upload (Profile Pictures, Documents, etc.)
+app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { userId, type = 'general' } = req.body;
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+    // Log upload details
+    console.log(`✅ File uploaded: ${req.file.filename} (${req.file.size} bytes) for user: ${req.user.userId}`);
+
+    // If it's a profile picture, update user's profilePic field
+    if (type === 'profile' && (userId === req.user.userId || req.user.role === 'admin')) {
+      try {
+        await User.findByIdAndUpdate(
+          userId || req.user.userId,
+          { 
+            profilePic: fileUrl,
+            updatedAt: new Date()
+          }
+        );
+        console.log(`✅ Profile picture updated for user: ${userId || req.user.userId}`);
+      } catch (updateError) {
+        console.error('⚠️ Failed to update profile picture in database:', updateError);
+        // Continue anyway - file was uploaded successfully
+      }
+    }
+
+    res.json({
+      message: 'File uploaded successfully',
+      fileUrl: fileUrl,
+      imageUrl: fileUrl, // For backward compatibility
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      type: type
+    });
+
+  } catch (error) {
+    console.error('❌ File upload error:', error);
+    res.status(500).json({ error: 'File upload failed' });
+  }
+});
+
+// Get uploaded file info
+app.get('/api/upload/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, 'uploads', filename);
+    
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      res.json({
+        filename: filename,
+        size: stats.size,
+        uploadDate: stats.birthtime,
+        url: `${req.protocol}://${req.get('host')}/uploads/${filename}`
+      });
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  } catch (error) {
+    console.error('❌ File info error:', error);
+    res.status(500).json({ error: 'Failed to get file info' });
+  }
+});
+
+// Delete uploaded file (admin only)
+app.delete('/api/upload/:filename', authenticateToken, (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { filename } = req.params;
+    const filePath = path.join(__dirname, 'uploads', filename);
+    
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`✅ File deleted: ${filename}`);
+      res.json({ message: 'File deleted successfully' });
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  } catch (error) {
+    console.error('❌ File deletion error:', error);
+    res.status(500).json({ error: 'Failed to delete file' });
   }
 });
 
