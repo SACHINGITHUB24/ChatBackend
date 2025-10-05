@@ -9,6 +9,8 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { v2: cloudinary } = require('cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
@@ -28,22 +30,12 @@ app.use(compression());
 app.use(morgan('combined'));
 
 // Rate limiting
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // limit each IP to 100 requests per windowMs
-//   message: 'Too many requests from this IP, please try again later.'
-// });
-// app.use('/api/', limiter);
-
-
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: Number.MAX_SAFE_INTEGER, // effectively unlimited requests
+  max: 100, // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.'
 });
-
 app.use('/api/', limiter);
-
 
 // CORS configuration
 app.use(cors({
@@ -61,43 +53,82 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static('uploads'));
 
 // ========================================
+// 📁 CLOUDINARY CONFIGURATION
+// ========================================
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
+  api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
+});
+
+// Cloudinary storage configuration
+const cloudinaryStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'HiChatUploads',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx'],
+    resource_type: 'auto',
+  },
+});
+
+// ========================================
 // 📁 FILE UPLOAD CONFIGURATION
 // ========================================
 
-// Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
+// Multer configuration for local file uploads (fallback)
+const localStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, 'uploads');
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileExtension = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + fileExtension);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-const upload = multer({
-  storage: storage,
+const upload = multer({ 
+  storage: localStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Allow images and common file types
-    const allowedTypes = /jpeg|jpg|png|gif|webp|pdf|doc|docx|txt/;
+    // Allow images, videos, and documents
+    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only images and documents are allowed.'));
+      cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
+    }
+  }
+});
+
+// Cloudinary upload configuration
+const cloudinaryUpload = multer({ 
+  storage: cloudinaryStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB limit for Cloudinary
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images, videos, and documents
+    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
     }
   }
 });
@@ -362,6 +393,111 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
   }
 });
 
+// ========================================
+// 📁 CLOUDINARY UPLOAD ROUTES
+// ========================================
+
+// Profile Image Upload to Cloudinary
+app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded' 
+      });
+    }
+
+    const { userId, type = 'profile' } = req.body;
+    
+    // Update user's profile picture in database
+    if (userId === req.user.userId || req.user.role === 'admin') {
+      try {
+        await User.findByIdAndUpdate(
+          userId || req.user.userId,
+          { 
+            profilePic: req.file.path,
+            updatedAt: new Date()
+          }
+        );
+        console.log(`✅ Profile picture updated for user: ${userId || req.user.userId}`);
+      } catch (updateError) {
+        console.error('⚠️ Failed to update profile picture in database:', updateError);
+      }
+    }
+
+    return res.json({
+      success: true,
+      url: req.file.path,
+      publicId: req.file.filename,
+      resourceType: req.file.resource_type || 'image',
+    });
+  } catch (error) {
+    console.error('Profile upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Chat Media Upload to Cloudinary
+app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No file uploaded' 
+      });
+    }
+
+    return res.json({
+      success: true,
+      url: req.file.path,
+      publicId: req.file.filename,
+      resourceType: req.file.resource_type || 'auto',
+      originalName: req.file.originalname,
+      size: req.file.size,
+    });
+  } catch (error) {
+    console.error('Chat upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Multiple Files Upload to Cloudinary
+app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No files uploaded' 
+      });
+    }
+
+    const uploadedFiles = req.files.map(file => ({
+      url: file.path,
+      publicId: file.filename,
+      resourceType: file.resource_type || 'auto',
+      originalName: file.originalname,
+      size: file.size,
+    }));
+
+    return res.json({
+      success: true,
+      files: uploadedFiles,
+    });
+  } catch (error) {
+    console.error('Multiple upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Get uploaded file info
 app.get('/api/upload/:filename', (req, res) => {
   try {
@@ -528,16 +664,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Get All Users
-app.get('/api/users', authenticateToken, async (req, res) => {
-  try {
-    const users = await User.find({}, '-password').sort({ name: 1 });
-    res.json(users);
-  } catch (error) {
-    console.error('❌ Get users error:', error);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
 
 // Get Current User
 app.get('/api/user/me', authenticateToken, async (req, res) => {
