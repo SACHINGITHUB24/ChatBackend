@@ -139,11 +139,25 @@ const cloudinaryUpload = multer({
 // 🔑 ZEGOCLOUD CONFIGURATION
 // ========================================
 
-const ZEGOCLOUD_CONFIG = {
-  APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
-  SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
-  TOKEN_EXPIRY: 24 * 60 * 60 // 24 hours in seconds
-};
+// const ZEGOCLOUD_CONFIG = {
+//   APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
+//   SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
+//   TOKEN_EXPIRY: 24 * 60 * 60 // 24 hours in seconds
+// };
+
+
+
+
+const effectiveTimeInSeconds = 24 * 60 * 60; // 24 hours
+const payload = '';
+const token = ZegoServerAssistant.generateToken04(
+  ZEGOCLOUD_CONFIG.APP_ID,
+  userId,
+  ZEGOCLOUD_CONFIG.SERVER_SECRET,
+  effectiveTimeInSeconds,
+  payload
+);
+
 
 // ========================================
 // 🗄️ DATABASE CONNECTION
