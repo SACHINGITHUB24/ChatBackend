@@ -139,24 +139,16 @@ const cloudinaryUpload = multer({
 // 🔑 ZEGOCLOUD CONFIGURATION
 // ========================================
 
-// const ZEGOCLOUD_CONFIG = {
-//   APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
-//   SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
-//   TOKEN_EXPIRY: 24 * 60 * 60 // 24 hours in seconds
-// };
+const ZEGOCLOUD_CONFIG = {
+  APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
+  SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
+  TOKEN_EXPIRY: 24 * 60 * 60 // 24 hours in seconds
+};
 
 
 
 
-const effectiveTimeInSeconds = 24 * 60 * 60; // 24 hours
-const payload = '';
-const token = ZegoServerAssistant.generateToken04(
-  ZEGOCLOUD_CONFIG.APP_ID,
-  userId,
-  ZEGOCLOUD_CONFIG.SERVER_SECRET,
-  effectiveTimeInSeconds,
-  payload
-);
+
 
 
 // ========================================
@@ -311,52 +303,52 @@ app.get('/api/health', (req, res) => {
 });
 
 //ZEGOCLOUD Token Generation
-app.post('/api/getZegoToken', async (req, res) => {
-  try {
-    const { userId } = req.body;
+// app.post('/api/getZegoToken', async (req, res) => {
+//   try {
+//     const { userId } = req.body;
     
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+//     if (!userId) {
+//       return res.status(400).json({ error: 'userId is required' });
+//     }
     
-    // Verify user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+//     // Verify user exists
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ error: 'User not found' });
+//     }
     
-    // Generate ZEGOCLOUD user ID if not exists
-    if (!user.zegoUserId) {
-      user.zegoUserId = `zego_${user._id}`;
-      await user.save();
-    }
+//     // Generate ZEGOCLOUD user ID if not exists
+//     if (!user.zegoUserId) {
+//       user.zegoUserId = `zego_${user._id}`;
+//       await user.save();
+//     }
     
-    // Generate token
-    const token = generateZegoToken(
-      ZEGOCLOUD_CONFIG.APP_ID,
-      user.zegoUserId,
-      ZEGOCLOUD_CONFIG.SERVER_SECRET,
-      ZEGOCLOUD_CONFIG.TOKEN_EXPIRY
-    );
+//     // Generate token
+//     const token = generateZegoToken(
+//       ZEGOCLOUD_CONFIG.APP_ID,
+//       user.zegoUserId,
+//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
+//       ZEGOCLOUD_CONFIG.TOKEN_EXPIRY
+//     );
     
-    console.log(`🎫 Generated ZEGOCLOUD token for user: ${user.username} (${user.zegoUserId})`);
+//     console.log(`🎫 Generated ZEGOCLOUD token for user: ${user.username} (${user.zegoUserId})`);
     
-    res.json({
-      token: token,
-      userId: user.zegoUserId,
-      expiresIn: ZEGOCLOUD_CONFIG.TOKEN_EXPIRY,
-      user: {
-        id: user._id,
-        name: user.name,
-        username: user.username
-      }
-    });
+//     res.json({
+//       token: token,
+//       userId: user.zegoUserId,
+//       expiresIn: ZEGOCLOUD_CONFIG.TOKEN_EXPIRY,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         username: user.username
+//       }
+//     });
     
-  } catch (error) {
-    console.error('❌ Token generation error:', error);
-    res.status(500).json({ error: 'Token generation failed' });
-  }
-});
+//   } catch (error) {
+//     console.error('❌ Token generation error:', error);
+//     res.status(500).json({ error: 'Token generation failed' });
+//   }
+// });
 
 
 
@@ -409,6 +401,89 @@ app.post('/api/getZegoToken', async (req, res) => {
 //     return res.status(500).json({ error: 'Token generation failed' });
 //   }
 // });
+
+
+
+
+
+
+
+
+// ✅ Fixed ZEGOCLOUD Token Route (copy this exact code)
+app.post('/api/getZegoToken', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    // Find user in DB
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Assign zegoUserId if missing
+    if (!user.zegoUserId) {
+      user.zegoUserId = `zego_${user._id}`;
+      await user.save();
+    }
+
+    // ⚙️ 24 hours minus 30-second safety buffer
+    const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
+    const payload = '';
+
+    // ✅ Generate token using your helper function (NOT ZegoServerAssistant)
+    const token = generateZegoToken(
+      ZEGOCLOUD_CONFIG.APP_ID,
+      user.zegoUserId,
+      ZEGOCLOUD_CONFIG.SERVER_SECRET,
+      effectiveTimeInSeconds
+    );
+
+    const expiresAt = Date.now() + (effectiveTimeInSeconds * 1000);
+
+    console.log(`🎫 Zego token generated for ${user.username} (${user.zegoUserId}), expires in ${effectiveTimeInSeconds}s`);
+
+    return res.json({
+      token,
+      appId: ZEGOCLOUD_CONFIG.APP_ID,
+      userId: user.zegoUserId,
+      expiresIn: effectiveTimeInSeconds,
+      expiresAt
+    });
+  } catch (err) {
+    console.error('❌ Token generation error:', err);
+    return res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
+
+
+
+//Refresh Token For Clint side {Optional}
+
+app.post('/api/refreshZegoToken', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
+    const token = generateZegoToken(
+      ZEGOCLOUD_CONFIG.APP_ID,
+      user.zegoUserId,
+      ZEGOCLOUD_CONFIG.SERVER_SECRET,
+      effectiveTimeInSeconds
+    );
+
+    return res.json({
+      token,
+      expiresIn: effectiveTimeInSeconds,
+      userId: user.zegoUserId
+    });
+  } catch (err) {
+    console.error('❌ Refresh token error:', err);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
+});
 
 
 
