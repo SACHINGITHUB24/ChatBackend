@@ -27,16 +27,7 @@ const app = express();
 app.use(compression());
 
 // Logging
-app.use(morgan('combined'));
-
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: NUMBER.MAX_SAFE_INTEGER, // limit each IP to 100 requests per windowMs
-//   message: 'Too many requests from this IP, please try again later.'
-// });
-// app.use('/api/', limiter);
-
-
+app.use(morgan('combined'))
 
 // Rate limiting
 const limiter = rateLimit({
@@ -305,105 +296,105 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ZEGOCLOUD Token Generation
-// app.post('/api/getZegoToken', authenticateToken, async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-    
-//     if (!userId) {
-//       return res.status(400).json({ error: 'userId is required' });
-//     }
-    
-//     // Verify user exists
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ error: 'User not found' });
-//     }
-    
-//     // Generate ZEGOCLOUD user ID if not exists
-//     if (!user.zegoUserId) {
-//       user.zegoUserId = `zego_${user._id}`;
-//       await user.save();
-//     }
-    
-//     // Generate token
-//     const token = generateZegoToken(
-//       ZEGOCLOUD_CONFIG.APP_ID,
-//       user.zegoUserId,
-//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-//       ZEGOCLOUD_CONFIG.TOKEN_EXPIRY
-//     );
-    
-//     console.log(`🎫 Generated ZEGOCLOUD token for user: ${user.username} (${user.zegoUserId})`);
-    
-//     res.json({
-//       token: token,
-//       userId: user.zegoUserId,
-//       expiresIn: ZEGOCLOUD_CONFIG.TOKEN_EXPIRY,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         username: user.username
-//       }
-//     });
-    
-//   } catch (error) {
-//     console.error('❌ Token generation error:', error);
-//     res.status(500).json({ error: 'Token generation failed' });
-//   }
-// });
-
-
-
-
-//Updated ZEGOCLOUD Token Generation
-
+//ZEGOCLOUD Token Generation
 app.post('/api/getZegoToken', async (req, res) => {
   try {
     const { userId } = req.body;
-
+    
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
-
-    // Verify user exists in MongoDB
+    
+    // Verify user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-
+    
     // Generate ZEGOCLOUD user ID if not exists
     if (!user.zegoUserId) {
       user.zegoUserId = `zego_${user._id}`;
       await user.save();
     }
-
-    // Generate Zego token
+    
+    // Generate token
     const token = generateZegoToken(
       ZEGOCLOUD_CONFIG.APP_ID,
       user.zegoUserId,
       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-      3600 // ✅ 1 hour validity (increase if needed)
+      ZEGOCLOUD_CONFIG.TOKEN_EXPIRY
     );
-
+    
     console.log(`🎫 Generated ZEGOCLOUD token for user: ${user.username} (${user.zegoUserId})`);
-
-    return res.json({
-      token,
+    
+    res.json({
+      token: token,
       userId: user.zegoUserId,
-      expiresIn: 3600,
+      expiresIn: ZEGOCLOUD_CONFIG.TOKEN_EXPIRY,
       user: {
         id: user._id,
         name: user.name,
         username: user.username
       }
     });
-
+    
   } catch (error) {
     console.error('❌ Token generation error:', error);
-    return res.status(500).json({ error: 'Token generation failed' });
+    res.status(500).json({ error: 'Token generation failed' });
   }
 });
+
+
+
+
+//Updated ZEGOCLOUD Token Generation
+
+// app.post('/api/getZegoToken', async (req, res) => {
+//   try {
+//     const { userId } = req.body;
+
+//     if (!userId) {
+//       return res.status(400).json({ error: 'userId is required' });
+//     }
+
+//     // Verify user exists in MongoDB
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ error: 'User not found' });
+//     }
+
+//     // Generate ZEGOCLOUD user ID if not exists
+//     if (!user.zegoUserId) {
+//       user.zegoUserId = `zego_${user._id}`;
+//       await user.save();
+//     }
+
+//     // Generate Zego token
+//     const token = generateZegoToken(
+//       ZEGOCLOUD_CONFIG.APP_ID,
+//       user.zegoUserId,
+//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
+//       3600 // ✅ 1 hour validity (increase if needed)
+//     );
+
+//     console.log(`🎫 Generated ZEGOCLOUD token for user: ${user.username} (${user.zegoUserId})`);
+
+//     return res.json({
+//       token,
+//       userId: user.zegoUserId,
+//       expiresIn: 3600,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         username: user.username
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Token generation error:', error);
+//     return res.status(500).json({ error: 'Token generation failed' });
+//   }
+// });
 
 
 
