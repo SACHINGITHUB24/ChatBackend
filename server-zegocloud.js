@@ -76,17 +76,43 @@ cloudinary.config({
 // });
 
 
+// const cloudinaryStorage = new CloudinaryStorage({
+//   cloudinary,
+//   params: {
+//     folder: 'uploads',
+//     allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'pdf', 'docx'],
+//     resource_type: 'auto'
+//   }
+// });
+
+
+// const cloudinaryUpload  = multer({ storage: cloudinaryStorage });
+
+
+
+
+
+//Again Cloudinary
+
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'uploads',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'pdf', 'docx'],
-    resource_type: 'auto'
+    folder: 'HiChatUploads', // main folder in Cloudinary
+    allowed_formats: ['jpg','jpeg','png','gif','mp4','mov','avi','pdf','doc','docx','txt'],
+    resource_type: 'auto', // auto-detects image/video/document
   }
 });
 
 
-const cloudinaryUpload  = multer({ storage: cloudinaryStorage });
+const cloudinaryUpload = multer({
+  storage: cloudinaryStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
+
+
+
+
+
 
 
 // ========================================
@@ -622,105 +648,165 @@ app.post('/upload', upload.single('file'), (req, res) => {
 // ========================================
 
 // Profile Image Upload to Cloudinary
-app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No file uploaded' 
-      });
-    }
+// app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         error: 'No file uploaded' 
+//       });
+//     }
 
-    const { userId, type = 'profile' } = req.body;
+//     const { userId, type = 'profile' } = req.body;
     
-    // Update user's profile picture in database
-    if (userId === req.user.userId || req.user.role === 'admin') {
-      try {
-        await User.findByIdAndUpdate(
-          userId || req.user.userId,
-          { 
-            profilePic: req.file.path,
-            updatedAt: new Date()
-          }
-        );
-        console.log(`✅ Profile picture updated for user: ${userId || req.user.userId}`);
-      } catch (updateError) {
-        console.error('⚠️ Failed to update profile picture in database:', updateError);
-      }
-    }
+//     // Update user's profile picture in database
+//     if (userId === req.user.userId || req.user.role === 'admin') {
+//       try {
+//         await User.findByIdAndUpdate(
+//           userId || req.user.userId,
+//           { 
+//             profilePic: req.file.path,
+//             updatedAt: new Date()
+//           }
+//         );
+//         console.log(`✅ Profile picture updated for user: ${userId || req.user.userId}`);
+//       } catch (updateError) {
+//         console.error('⚠️ Failed to update profile picture in database:', updateError);
+//       }
+//     }
 
-    return res.json({
+//     return res.json({
+//       success: true,
+//       url: req.file.path,
+//       publicId: req.file.filename,
+//       resourceType: req.file.resource_type || 'image',
+//     });
+//   } catch (error) {
+//     console.error('Profile upload error:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       error: error.message 
+//     });
+//   }
+// });
+
+
+
+app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    await User.findByIdAndUpdate(req.user.userId, {
+      profilePic: req.file.path,
+      updatedAt: new Date()
+    });
+
+    res.json({
       success: true,
       url: req.file.path,
       publicId: req.file.filename,
       resourceType: req.file.resource_type || 'image',
     });
-  } catch (error) {
-    console.error('Profile upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
+
 
 // Chat Media Upload to Cloudinary
-app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No file uploaded' 
-      });
-    }
+// app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         error: 'No file uploaded' 
+//       });
+//     }
 
-    return res.json({
-      success: true,
-      url: req.file.path,
-      publicId: req.file.filename,
-      resourceType: req.file.resource_type || 'auto',
-      originalName: req.file.originalname,
-      size: req.file.size,
-    });
-  } catch (error) {
-    console.error('Chat upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
+//     return res.json({
+//       success: true,
+//       url: req.file.path,
+//       publicId: req.file.filename,
+//       resourceType: req.file.resource_type || 'auto',
+//       originalName: req.file.originalname,
+//       size: req.file.size,
+//     });
+//   } catch (error) {
+//     console.error('Chat upload error:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       error: error.message 
+//     });
+//   }
+// });
+
+
+
+app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  res.json({
+    success: true,
+    url: req.file.path,
+    publicId: req.file.filename,
+    resourceType: req.file.resource_type || 'auto',
+    originalName: req.file.originalname,
+    size: req.file.size,
+  });
 });
+
+
+
+
+
 
 // Multiple Files Upload to Cloudinary
-app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No files uploaded' 
-      });
-    }
+// app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), async (req, res) => {
+//   try {
+//     if (!req.files || req.files.length === 0) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         error: 'No files uploaded' 
+//       });
+//     }
 
-    const uploadedFiles = req.files.map(file => ({
-      url: file.path,
-      publicId: file.filename,
-      resourceType: file.resource_type || 'auto',
-      originalName: file.originalname,
-      size: file.size,
-    }));
+//     const uploadedFiles = req.files.map(file => ({
+//       url: file.path,
+//       publicId: file.filename,
+//       resourceType: file.resource_type || 'auto',
+//       originalName: file.originalname,
+//       size: file.size,
+//     }));
 
-    return res.json({
-      success: true,
-      files: uploadedFiles,
-    });
-  } catch (error) {
-    console.error('Multiple upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
+//     return res.json({
+//       success: true,
+//       files: uploadedFiles,
+//     });
+//   } catch (error) {
+//     console.error('Multiple upload error:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       error: error.message 
+//     });
+//   }
+// });
+
+
+
+app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), (req, res) => {
+  if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+  const uploadedFiles = req.files.map(f => ({
+    url: f.path,
+    publicId: f.filename,
+    resourceType: f.resource_type || 'auto',
+    originalName: f.originalname,
+    size: f.size
+  }));
+
+  res.json({ success: true, files: uploadedFiles });
 });
+
 
 // Get uploaded file info
 app.get('/api/upload/:filename', (req, res) => {
