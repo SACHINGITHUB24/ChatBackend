@@ -633,7 +633,7 @@ app.post('/api/upload', authenticateToken, uploadLocal.single('image'), async (r
 });
 
 
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/upload', uploadCloudinary.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -642,6 +642,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
     url: req.file.path
   });
 });
+
+
+
 
 // ========================================
 // 📁 CLOUDINARY UPLOAD ROUTES
