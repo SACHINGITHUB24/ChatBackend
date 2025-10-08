@@ -86,7 +86,7 @@ const cloudinaryStorage = new CloudinaryStorage({
 });
 
 
-const upload = multer({ storage: cloudinaryStorage });
+const cloudinaryUpload  = multer({ storage: cloudinaryStorage });
 
 
 // ========================================
