@@ -66,14 +66,26 @@ cloudinary.config({
 });
 
 // Cloudinary storage configuration
-const cloudinaryStorage = new CloudinaryStorage({
+// const cloudinaryStorage = new CloudinaryStorage({
+//   cloudinary,
+//   params: {
+//     folder: 'HiChatUploads',
+//     allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx'],
+//     resource_type: 'auto',
+//   },
+// });
+
+
+const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: 'HiChatUploads',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'pdf', 'doc', 'docx'],
-    resource_type: 'auto',
-  },
+    folder: 'uploads',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'pdf', 'docx'],
+    resource_type: 'auto'
+  }
 });
+
+
 
 // ========================================
 // 📁 FILE UPLOAD CONFIGURATION
@@ -536,6 +548,17 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
     console.error('❌ File upload error:', error);
     res.status(500).json({ error: 'File upload failed' });
   }
+});
+
+
+app.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  res.json({
+    message: 'File uploaded successfully',
+    url: req.file.path
+  });
 });
 
 // ========================================
@@ -1625,6 +1648,30 @@ app.put('/api/admin/users/:userId/role', authenticateToken, async (req, res) => 
     res.status(500).json({ error: 'Role update failed' });
   }
 });
+
+//Backup Logic implemented But for testing Purposes 
+app.get('/backup/:userId', async (req, res) => {
+  try {
+    const chats = await Chat.find({ participants: req.params.userId }).populate('messages');
+    const backupData = JSON.stringify(chats);
+    const filePath = path.join(__dirname, 'backup.json');
+    fs.writeFileSync(filePath, backupData);
+
+    // Upload the JSON backup to Cloudinary
+    const result = await cloudinary.uploader.upload(filePath, {
+      resource_type: 'raw',
+      folder: 'backups'
+    });
+
+    res.json({
+      message: 'Backup created successfully',
+      backupUrl: result.secure_url
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ========================================
 // 🚀 SERVER STARTUP
