@@ -586,7 +586,7 @@ app.post('/api/refreshZegoToken', async (req, res) => {
 // ========================================
 
 // File Upload (Profile Pictures, Documents, etc.)
-app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
+app.post('/api/upload', authenticateToken, uploadLocal.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
