@@ -76,7 +76,7 @@ cloudinary.config({
 // });
 
 
-const storage = new CloudinaryStorage({
+const cloudinaryStorage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: 'uploads',
@@ -85,68 +85,122 @@ const storage = new CloudinaryStorage({
   }
 });
 
-const upload = multer({ storage });
+
 
 
 // ========================================
 // 📁 FILE UPLOAD CONFIGURATION
 // ========================================
 
+// const uploadsDir = path.join(__dirname, 'uploads');
+// if (!fs.existsSync(uploadsDir)) {
+//   fs.mkdirSync(uploadsDir, { recursive: true });
+// }
+
+// // Multer configuration for local file uploads (fallback)
+// const localStorage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     const uploadPath = path.join(__dirname, 'uploads');
+//     cb(null, uploadPath);
+//   },
+//   filename: (req, file, cb) => {
+//     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+//     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+//   }
+// });
+
+// const upload = multer({ 
+//   storage: localStorage,
+//   limits: {
+//     fileSize: 10 * 1024 * 1024 // 10MB limit
+//   },
+//   fileFilter: (req, file, cb) => {
+//     // Allow images, videos, and documents
+//     const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
+//     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+//     const mimetype = allowedTypes.test(file.mimetype);
+
+//     if (mimetype && extname) {
+//       return cb(null, true);
+//     } else {
+//       cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
+//     }
+//   }
+// });
+
+// Cloudinary upload configuration
+
+// const cloudinaryUpload = multer({ 
+//   storage: cloudinaryStorage,
+//   limits: {
+//     fileSize: 50 * 1024 * 1024 // 50MB limit for Cloudinary
+//   },
+//   fileFilter: (req, file, cb) => {
+//     // Allow images, videos, and documents
+//     const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
+//     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+//     const mimetype = allowedTypes.test(file.mimetype);
+
+//     if (mimetype && extname) {
+//       return cb(null, true);
+//     } else {
+//       cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
+//     }
+//   }
+// });
+
+
+
+const uploadCloudinary = multer({
+  storage: cloudinaryStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) cb(null, true);
+    else cb(new Error('Invalid file type.'));
+  }
+});
+
+
+
+
+
+//Local Backup 
+
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Multer configuration for local file uploads (fallback)
 const localStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'uploads');
-    cb(null, uploadPath);
-  },
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
 
-const upload = multer({ 
+
+
+const uploadLocal = multer({
   storage: localStorage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    // Allow images, videos, and documents
     const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
-    }
+    if (mimetype && extname) cb(null, true);
+    else cb(new Error('Invalid file type.'));
   }
 });
 
-// Cloudinary upload configuration
-const cloudinaryUpload = multer({ 
-  storage: cloudinaryStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit for Cloudinary
-  },
-  fileFilter: (req, file, cb) => {
-    // Allow images, videos, and documents
-    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
 
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
-    }
-  }
-});
+
+
+
+
 
 // ========================================
 // 🔑 ZEGOCLOUD CONFIGURATION
