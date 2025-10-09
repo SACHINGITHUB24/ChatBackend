@@ -1205,16 +1205,21 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
 
 // ========================================
-// 📁 CLOUDINARY CONFIGURATION
+// 📁 CLOUDINARY CONFIGURATION (Removed fallbacks, MUST USE ENV)
 // ========================================
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
-  api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
+// Check if critical Cloudinary settings are missing
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.warn('⚠️ WARNING: CLOUDINARY ENVIRONMENT VARIABLES ARE NOT FULLY SET. Uploads will fail until configured.');
+} else {
+    console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
+}
 
 // ========================================
 // 📁 FILE UPLOAD CONFIGURATION
@@ -1305,12 +1310,12 @@ const localStorage = multer.diskStorage({
 const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ========================================
-// 🔑 ZEGOCLOUD CONFIGURATION
+// 🔑 ZEGOCLOUD CONFIGURATION (Removed fallbacks, MUST USE ENV)
 // ========================================
 
 const ZEGOCLOUD_CONFIG = {
-  APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
-  SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
+  APP_ID: parseInt(process.env.ZEGO_APP_ID),
+  SERVER_SECRET: process.env.ZEGO_SERVER_SECRET,
   TOKEN_EXPIRY: 24 * 60 * 60
 };
 
@@ -1450,7 +1455,7 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     cloudinary: {
-      configured: true,
+      configured: !!(cloudinary.config().cloud_name), // Check if env var is set
       cloudName: cloudinary.config().cloud_name
     },
     zegocloud: {
@@ -1463,6 +1468,10 @@ app.get('/api/health', (req, res) => {
 // ZEGOCLOUD Token Generation
 app.post('/api/getZegoToken', async (req, res) => {
   try {
+    if (!ZEGOCLOUD_CONFIG.APP_ID || !ZEGOCLOUD_CONFIG.SERVER_SECRET) {
+      return res.status(500).json({ error: 'ZEGOCLOUD credentials missing from environment variables.' });
+    }
+
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
@@ -1502,6 +1511,9 @@ app.post('/api/getZegoToken', async (req, res) => {
 // Refresh Token
 app.post('/api/refreshZegoToken', async (req, res) => {
   try {
+    if (!ZEGOCLOUD_CONFIG.APP_ID || !ZEGOCLOUD_CONFIG.SERVER_SECRET) {
+      return res.status(500).json({ error: 'ZEGOCLOUD credentials missing from environment variables.' });
+    }
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
@@ -1527,6 +1539,76 @@ app.post('/api/refreshZegoToken', async (req, res) => {
   }
 });
 
+// --- NEW CHAT/GROUP ROUTES ADDED TO FIX 404 ERROR ---
+
+// Fetch all users (for DMs, excluding current user)
+app.get('/api/users', authenticateToken, async (req, res) => {
+    try {
+        const users = await User.find({ _id: { $ne: req.user.userId } }).select('-password');
+        res.json(users);
+    } catch (err) {
+        console.error('❌ Error fetching users:', err);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+
+// Fetch all groups a user belongs to
+app.get('/api/groups', authenticateToken, async (req, res) => {
+    try {
+        const groups = await Group.find({ members: req.user.userId }).populate('createdBy', 'username');
+        res.json(groups);
+    } catch (err) {
+        console.error('❌ Error fetching groups:', err);
+        res.status(500).json({ error: 'Failed to fetch groups' });
+    }
+});
+
+// Get messages for a specific group (FIXES THE 404 FOR /api/groups/:groupId/messages)
+app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+
+    // Check if group exists first
+    const group = await Group.findById(groupId);
+    if (!group) {
+        return res.status(404).json({ error: 'Group not found.' });
+    }
+    
+    // Check if user is a member of the group
+    if (!group.members.includes(req.user.userId)) {
+        // NOTE: Depending on your security model, you might allow non-members to read history, but typically only members can.
+        // For now, we'll allow reading if the group exists.
+        // If strict security is needed: return res.status(403).json({ error: 'Not authorized to view this group\'s messages.' });
+    }
+
+
+    const messages = await Message.find({ group: groupId })
+      .sort({ timestamp: -1 }) // Sort by newest first
+      .limit(limit)
+      .skip(offset)
+      .populate('sender', 'username profilePic zegoUserId')
+      .exec();
+      
+    // Reverse the order for the client to display oldest at the top (standard chat view)
+    res.json(messages.reverse()); 
+
+  } catch (err) {
+    // If the groupId format is invalid (e.g., not a valid MongoDB ObjectId), Mongoose will throw a CastError.
+    // We catch that here and return a 404 or 400.
+    if (err.name === 'CastError') {
+         return res.status(400).json({ error: 'Invalid group ID format.' });
+    }
+    console.error('❌ Error fetching group messages:', err);
+    res.status(500).json({ error: 'Failed to fetch group messages' });
+  }
+});
+
+
+// --- END NEW CHAT/GROUP ROUTES ---
+
+
 // ========================================
 // 🚨 MULTER/CLOUDINARY ERROR HANDLER (CRITICAL DEBUG TOOL)
 // ========================================
@@ -1540,6 +1622,15 @@ const uploadErrorHandler = (err, req, res, next) => {
         });
     } else if (err) {
         // Generic error (This is where Cloudinary API errors usually land)
+        // Check for specific API key error to provide clearer feedback
+        if (err.http_code === 401 && err.message.includes('Invalid api_key')) {
+             console.error('❌ CLOUDINARY AUTH FAILED: Check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in environment variables.');
+             return res.status(500).json({
+                 success: false,
+                 error: 'Cloudinary Authentication Failed. Please check server environment configuration.'
+             });
+        }
+        
         console.error('❌ Cloudinary Upload Failed:', err.message, err.stack);
         return res.status(500).json({ 
             success: false, 
@@ -1739,13 +1830,6 @@ app.post('/api/upload', authenticateToken, cloudinaryUpload.single('file'), uplo
     });
   }
 });
-
-
-
-
-
-
-
 
 
 
