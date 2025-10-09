@@ -580,39 +580,39 @@ app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('
 });
 
 // Local File Upload (Fallback)
-app.post('/api/upload', authenticateToken, uploadLocal.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
+// app.post('/api/upload', authenticateToken, uploadLocal.single('file'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ error: 'No file uploaded' });
+//     }
 
-    const { userId, type = 'general' } = req.body;
-    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+//     const { userId, type = 'general' } = req.body;
+//     const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+//     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
 
-    console.log(`✅ File uploaded locally: ${req.file.filename}`);
+//     console.log(`✅ File uploaded locally: ${req.file.filename}`);
 
-    if (type === 'profile') {
-      await User.findByIdAndUpdate(userId || req.user.userId, {
-        profilePic: fileUrl,
-        updatedAt: new Date()
-      });
-    }
+//     if (type === 'profile') {
+//       await User.findByIdAndUpdate(userId || req.user.userId, {
+//         profilePic: fileUrl,
+//         updatedAt: new Date()
+//       });
+//     }
 
-    res.json({
-      success: true,
-      message: 'File uploaded successfully',
-      fileUrl: fileUrl,
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      type: type
-    });
-  } catch (error) {
-    console.error('❌ File upload error:', error);
-    res.status(500).json({ error: 'File upload failed' });
-  }
-});
+//     res.json({
+//       success: true,
+//       message: 'File uploaded successfully',
+//       fileUrl: fileUrl,
+//       filename: req.file.filename,
+//       originalName: req.file.originalname,
+//       size: req.file.size,
+//       type: type
+//     });
+//   } catch (error) {
+//     console.error('❌ File upload error:', error);
+//     res.status(500).json({ error: 'File upload failed' });
+//   }
+// });
 
 // Backup Endpoint
 app.get('/api/backup/:userId', authenticateToken, async (req, res) => {
