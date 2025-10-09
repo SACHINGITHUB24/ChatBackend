@@ -50,10 +50,119 @@ app.use('/uploads', express.static('uploads'));
 // ========================================
 
 // Using ChatData API Key from your Cloudinary account
+// cloudinary.config({
+//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
+//   api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
+//   api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
+// });
+
+// console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
+
+// // ========================================
+// // 📁 FILE UPLOAD CONFIGURATION
+// // ========================================
+
+// // Enhanced Cloudinary storage with proper error handling
+// const cloudinaryStorage = new CloudinaryStorage({
+//   cloudinary: cloudinary,
+//   params: async (req, file) => {
+//     try {
+//       // Determine resource type based on mime type
+//       let resourceType = 'auto';
+//       if (file.mimetype.startsWith('video/')) {
+//         resourceType = 'video';
+//       } else if (file.mimetype.startsWith('image/')) {
+//         resourceType = 'image';
+//       } else {
+//         resourceType = 'raw'; // for documents
+//       }
+
+//       // Determine folder based on file type
+//       let folder = 'ChatData';
+//       if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) {
+//         folder = 'ChatData/images';
+//       } else if (file.mimetype.startsWith('video/')) {
+//         folder = 'ChatData/videos';
+//       } else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) {
+//         folder = 'ChatData/documents';
+//       }
+
+//       return {
+//         folder: folder,
+//         resource_type: resourceType,
+//         allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
+//         public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+//       };
+//     } catch (error) {
+//       console.error('❌ Cloudinary params error:', error);
+//       throw error;
+//     }
+//   }
+// });
+
+// const cloudinaryUpload = multer({
+//   storage: cloudinaryStorage,
+//   limits: { 
+//     fileSize: 100 * 1024 * 1024, // 100MB for videos
+//     files: 10
+//   },
+//   fileFilter: (req, file, cb) => {
+//     const allowedMimes = [
+//       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+//       'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
+//       'application/pdf', 'application/msword',
+//       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+//       'text/plain'
+//     ];
+    
+//     if (allowedMimes.includes(file.mimetype)) {
+//       cb(null, true);
+//     } else {
+//       cb(new Error(`Invalid file type: ${file.mimetype}`));
+//     }
+//   }
+// });
+
+// // Local storage backup
+// const uploadsDir = path.join(__dirname, 'uploads');
+// if (!fs.existsSync(uploadsDir)) {
+//   fs.mkdirSync(uploadsDir, { recursive: true });
+// }
+
+// const localStorage = multer.diskStorage({
+//   destination: (req, file, cb) => cb(null, uploadsDir),
+//   filename: (req, file, cb) => {
+//     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+//     cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+//   }
+// });
+
+// const uploadLocal = multer({
+//   storage: localStorage,
+//   limits: { fileSize: 50 * 1024 * 1024 },
+//   fileFilter: (req, file, cb) => {
+//     const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt|webm/;
+//     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+//     const mimetype = file.mimetype.includes('image') || file.mimetype.includes('video') || 
+//                      file.mimetype.includes('pdf') || file.mimetype.includes('document') ||
+//                      file.mimetype.includes('text');
+//     if (mimetype && extname) {
+//       cb(null, true);
+//     } else {
+//       cb(new Error('Invalid file type.'));
+//     }
+//   }
+// });
+
+
+
+
+
+
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
-  api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
@@ -62,50 +171,31 @@ console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
 // 📁 FILE UPLOAD CONFIGURATION
 // ========================================
 
-// Enhanced Cloudinary storage with proper error handling
 const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    try {
-      // Determine resource type based on mime type
-      let resourceType = 'auto';
-      if (file.mimetype.startsWith('video/')) {
-        resourceType = 'video';
-      } else if (file.mimetype.startsWith('image/')) {
-        resourceType = 'image';
-      } else {
-        resourceType = 'raw'; // for documents
-      }
+    let resourceType = 'auto';
+    if (file.mimetype.startsWith('video/')) resourceType = 'video';
+    else if (file.mimetype.startsWith('image/')) resourceType = 'image';
+    else resourceType = 'raw';
 
-      // Determine folder based on file type
-      let folder = 'ChatData';
-      if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) {
-        folder = 'ChatData/images';
-      } else if (file.mimetype.startsWith('video/')) {
-        folder = 'ChatData/videos';
-      } else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) {
-        folder = 'ChatData/documents';
-      }
+    let folder = 'ChatData';
+    if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) folder = 'ChatData/images';
+    else if (file.mimetype.startsWith('video/')) folder = 'ChatData/videos';
+    else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) folder = 'ChatData/documents';
 
-      return {
-        folder: folder,
-        resource_type: resourceType,
-        allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
-        public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-      };
-    } catch (error) {
-      console.error('❌ Cloudinary params error:', error);
-      throw error;
-    }
+    return {
+      folder: folder,
+      resource_type: resourceType,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+    };
   }
 });
 
 const cloudinaryUpload = multer({
   storage: cloudinaryStorage,
-  limits: { 
-    fileSize: 100 * 1024 * 1024, // 100MB for videos
-    files: 10
-  },
+  limits: { fileSize: 100 * 1024 * 1024, files: 10 },
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
@@ -114,45 +204,21 @@ const cloudinaryUpload = multer({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain'
     ];
-    
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`Invalid file type: ${file.mimetype}`));
-    }
+    if (allowedMimes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error(`Invalid file type: ${file.mimetype}`));
   }
 });
 
-// Local storage backup
+// Local storage fallback
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const localStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
+  filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
 });
 
-const uploadLocal = multer({
-  storage: localStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt|webm/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = file.mimetype.includes('image') || file.mimetype.includes('video') || 
-                     file.mimetype.includes('pdf') || file.mimetype.includes('document') ||
-                     file.mimetype.includes('text');
-    if (mimetype && extname) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type.'));
-    }
-  }
-});
+const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ========================================
 // 🔑 ZEGOCLOUD CONFIGURATION
