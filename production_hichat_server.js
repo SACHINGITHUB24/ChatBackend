@@ -78,13 +78,13 @@ const cloudinaryStorage = new CloudinaryStorage({
       }
 
       // Determine folder based on file type
-      let folder = 'HiChatUploads';
+      let folder = 'ChatData';
       if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) {
-        folder = 'HiChatUploads/images';
+        folder = 'ChatData/images';
       } else if (file.mimetype.startsWith('video/')) {
-        folder = 'HiChatUploads/videos';
+        folder = 'ChatData/videos';
       } else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) {
-        folder = 'HiChatUploads/documents';
+        folder = 'ChatData/documents';
       }
 
       return {
