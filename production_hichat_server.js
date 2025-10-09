@@ -179,10 +179,10 @@ const cloudinaryStorage = new CloudinaryStorage({
     else if (file.mimetype.startsWith('image/')) resourceType = 'image';
     else resourceType = 'raw';
 
-    let folder = 'ChatData';
-    if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) folder = 'ChatData/images';
-    else if (file.mimetype.startsWith('video/')) folder = 'ChatData/videos';
-    else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) folder = 'ChatData/documents';
+    let folder = 'uploads';
+    if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) folder = 'uploads/images';
+    else if (file.mimetype.startsWith('video/')) folder = 'uploads/videos';
+    else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) folder = 'uploads/documents';
 
     return {
       folder: folder,
