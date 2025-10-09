@@ -621,6 +621,66 @@ app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('
 //   }
 // });
 
+
+//New Updated /api/upload Route because of testing purposes 
+
+
+// Cloudinary Upload (Replacing the local /api/upload endpoint)
+// This forces all uploads to use Cloudinary, even if the front-end uses the old endpoint name
+app.post('/api/upload', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'No file uploaded' 
+      });
+    }
+
+    console.log(`✅ File uploaded via /api/upload (Cloudinary): ${req.file.originalname} -> ${req.file.path}`);
+
+    const { type = 'general', userId } = req.body;
+    
+    // Determine message type based on file mimetype
+    let messageType = 'file';
+    if (req.file.mimetype.startsWith('image/')) {
+      messageType = 'image';
+      // If it's a profile upload, update the user profilePic
+      if (type === 'profile') {
+        const updatedUser = await User.findByIdAndUpdate(
+          userId || req.user.userId,
+          { profilePic: req.file.path, updatedAt: new Date() },
+          { new: true, select: '-password' }
+        );
+        if (!updatedUser) {
+           console.warn('⚠️ Could not update user profilePic for ID:', userId || req.user.userId);
+        }
+      }
+    } else if (req.file.mimetype.startsWith('video/')) {
+      messageType = 'video';
+    } else if (req.file.mimetype.startsWith('audio/')) {
+      messageType = 'audio';
+    }
+
+    res.json({
+      success: true,
+      message: 'File uploaded successfully to Cloudinary',
+      // Ensure you return the 'fileUrl' key which the front-end might expect from the old local upload
+      fileUrl: req.file.path, 
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      type: type,
+      messageType: messageType
+    });
+  } catch (err) {
+    console.error('❌ Cloudinary Upload (via /api/upload) error:', err);
+    res.status(500).json({ 
+      success: false,
+      error: 'File upload failed to Cloudinary: ' + err.message
+    });
+  }
+});
+
 // Backup Endpoint
 app.get('/api/backup/:userId', authenticateToken, async (req, res) => {
   try {
