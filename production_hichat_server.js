@@ -178,27 +178,68 @@ console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
 // 📁 FILE UPLOAD CONFIGURATION
 // ========================================
 
+// const cloudinaryStorage = new CloudinaryStorage({
+//   cloudinary: cloudinary,
+//   params: async (req, file) => {
+//     let resourceType = 'auto';
+//     if (file.mimetype.startsWith('video/')) resourceType = 'video';
+//     else if (file.mimetype.startsWith('image/')) resourceType = 'image';
+//     else resourceType = 'raw';
+
+//     let folder = 'uploads';
+//     if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) folder = 'uploads/images';
+//     else if (file.mimetype.startsWith('video/')) folder = 'uploads/videos';
+//     else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) folder = 'uploads/documents';
+
+//     return {
+//       folder: folder,
+//       resource_type: resourceType,
+//       allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
+//       public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+//     };
+//   }
+// });
+
+
+
+
+
 const cloudinaryStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    let resourceType = 'auto';
-    if (file.mimetype.startsWith('video/')) resourceType = 'video';
-    else if (file.mimetype.startsWith('image/')) resourceType = 'image';
-    else resourceType = 'raw';
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    let resourceType = 'auto';
+    if (file.mimetype.startsWith('video/')) resourceType = 'video';
+    else if (file.mimetype.startsWith('image/')) resourceType = 'image';
+    else resourceType = 'raw';
 
-    let folder = 'uploads';
-    if (file.fieldname === 'file' && file.mimetype.startsWith('image/')) folder = 'uploads/images';
-    else if (file.mimetype.startsWith('video/')) folder = 'uploads/videos';
-    else if (file.mimetype.includes('pdf') || file.mimetype.includes('document')) folder = 'uploads/documents';
+    // Use a specific, clear folder structure in Cloudinary
+    let folder = 'HiChat'; 
+    if (file.fieldname === 'file') {
+        if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
+        else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
+        else if (file.mimetype.includes('pdf') || file.mimetype.includes('document') || file.mimetype.includes('text')) {
+             folder = 'HiChat/documents';
+        }
+    } else {
+        // Fallback for other file fields if any (e.g., if you later add an audio field)
+        folder = 'HiChat/others';
+    }
 
-    return {
-      folder: folder,
-      resource_type: resourceType,
-      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
-      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-    };
-  }
+    return {
+      folder: folder,
+      resource_type: resourceType,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+    };
+  }
 });
+
+
+
+
+
+
+
 
 const cloudinaryUpload = multer({
   storage: cloudinaryStorage,
