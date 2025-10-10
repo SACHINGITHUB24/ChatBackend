@@ -1,1164 +1,4 @@
-// Hi Chat Backend Server - Production Ready
-// 100% Working with Cloudinary Integration
-
-// const express = require('express');
-// const cors = require('cors');
-// const bcrypt = require('bcryptjs');
-// const jwt = require('jsonwebtoken');
-// const mongoose = require('mongoose');
-// const multer = require('multer');
-// const path = require('path');
-// const fs = require('fs');
-// const { v2: cloudinary } = require('cloudinary');
-// const { CloudinaryStorage } = require('multer-storage-cloudinary');
-// const crypto = require('crypto');
-// const rateLimit = require('express-rate-limit');
-// const compression = require('compression');
-// const morgan = require('morgan');
-// require('dotenv').config();
-
-// const app = express();
-
-// // ========================================
-// // 🔧 MIDDLEWARE SETUP
-// // ========================================
-
-// app.use(compression());
-// app.use(morgan('combined'));
-
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000,
-//   max: Number.MAX_SAFE_INTEGER,
-//   message: 'Too many requests from this IP, please try again later.'
-// });
-
-// app.use('/api/', limiter);
-
-// app.use(cors({
-//   origin: process.env.FRONTEND_URL || '*',
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
-
-// app.use(express.json({ limit: '50mb' }));
-// app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-// app.use('/uploads', express.static('uploads'));
-
-// // cloudinary.config({
-// //   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-// //   api_key: process.env.CLOUDINARY_API_KEY,
-// //   api_secret: process.env.CLOUDINARY_API_SECRET,
-// // });
-
-
-// cloudinary.config({
-//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
-//   api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
-//   api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
-// });
-
-// console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
-
-
-// const cloudinaryStorage = new CloudinaryStorage({
-//   cloudinary: cloudinary,
-//   params: async (req, file) => {
-//     let resourceType = 'auto';
-//     if (file.mimetype.startsWith('video/')) resourceType = 'video';
-//     else if (file.mimetype.startsWith('image/')) resourceType = 'image';
-//     else resourceType = 'raw';
-
-//     // Use a specific, clear folder structure in Cloudinary
-//     let folder = 'HiChat'; 
-//     if (file.fieldname === 'file') {
-//         if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
-//         else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
-//         else if (file.mimetype.includes('pdf') || file.mimetype.includes('document') || file.mimetype.includes('text')) {
-//              folder = 'HiChat/documents';
-//         }
-//     } else {
-//         // Fallback for other file fields if any (e.g., if you later add an audio field)
-//         folder = 'HiChat/others';
-//     }
-
-//     return {
-//       folder: folder,
-//       resource_type: resourceType,
-//       allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
-//       public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-//     };
-//   }
-// });
-
-
-
-
-
-
-
-
-// const cloudinaryUpload = multer({
-//   storage: cloudinaryStorage,
-//   limits: { fileSize: 100 * 1024 * 1024, files: 10 },
-//   fileFilter: (req, file, cb) => {
-//     const allowedMimes = [
-//       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-//       'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
-//       'application/pdf', 'application/msword',
-//       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-//       'text/plain'
-//     ];
-//     if (allowedMimes.includes(file.mimetype)) cb(null, true);
-//     else cb(new Error(`Invalid file type: ${file.mimetype}`));
-//   }
-// });
-
-// // Local storage fallback
-// const uploadsDir = path.join(__dirname, 'uploads');
-// if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-// const localStorage = multer.diskStorage({
-//   destination: (req, file, cb) => cb(null, uploadsDir),
-//   filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
-// });
-
-// const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
-
-// // ========================================
-// // 🔑 ZEGOCLOUD CONFIGURATION
-// // ========================================
-
-// const ZEGOCLOUD_CONFIG = {
-//   APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
-//   SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
-//   TOKEN_EXPIRY: 24 * 60 * 60
-// };
-
-// // ========================================
-// // 🗄️ DATABASE CONNECTION
-// // ========================================
-
-// const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hichat';
-
-// mongoose.connect(MONGODB_URI, {
-//   useNewUrlParser: true,
-//   useUnifiedTopology: true,
-// })
-// .then(() => console.log('✅ Connected to MongoDB'))
-// .catch((error) => {
-//   console.error('❌ MongoDB connection error:', error);
-//   process.exit(1);
-// });
-
-// // ========================================
-// // 📊 DATABASE MODELS
-// // ========================================
-
-// const userSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   username: { type: String, required: true, unique: true },
-//   email: { type: String, required: true, unique: true },
-//   password: { type: String, required: true },
-//   role: { type: String, enum: ['user', 'admin'], default: 'user' },
-//   profilePic: { type: String, default: '' },
-//   isOnline: { type: Boolean, default: false },
-//   lastSeen: { type: Date, default: Date.now },
-//   zegoUserId: { type: String, unique: true, sparse: true },
-//   createdAt: { type: Date, default: Date.now },
-//   updatedAt: { type: Date, default: Date.now }
-// });
-
-// const groupSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   description: { type: String, default: '' },
-//   profilePic: { type: String, default: '' },
-//   members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-//   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-//   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   zegoGroupId: { type: String, unique: true, sparse: true },
-//   createdAt: { type: Date, default: Date.now },
-//   updatedAt: { type: Date, default: Date.now }
-// });
-
-// const messageSchema = new mongoose.Schema({
-//   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-//   group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
-//   content: { type: String, default: '' },
-//   messageType: { type: String, enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
-//   fileUrl: { type: String },
-//   fileName: { type: String },
-//   fileSize: { type: Number },
-//   zegoMessageId: { type: String },
-//   timestamp: { type: Date, default: Date.now }
-// });
-
-// const User = mongoose.model('User', userSchema);
-// const Group = mongoose.model('Group', groupSchema);
-// const Message = mongoose.model('Message', messageSchema);
-
-// // ========================================
-// // 🔐 AUTHENTICATION MIDDLEWARE
-// // ========================================
-
-// const authenticateToken = (req, res, next) => {
-//   const authHeader = req.headers['authorization'];
-//   const token = authHeader && authHeader.split(' ')[1];
-
-//   if (!token) {
-//     return res.status(401).json({ error: 'Access token required' });
-//   }
-
-//   jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-//     if (err) {
-//       return res.status(403).json({ error: 'Invalid or expired token' });
-//     }
-//     req.user = user;
-//     next();
-//   });
-// };
-
-// // ========================================
-// // 🎯 ZEGOCLOUD TOKEN GENERATION
-// // ========================================
-
-// function generateZegoToken(appId, userId, serverSecret, effectiveTimeInSeconds) {
-//   const currentTime = Math.floor(Date.now() / 1000);
-//   const expiredTime = currentTime + effectiveTimeInSeconds;
-  
-//   const payload = {
-//     iss: appId,
-//     exp: expiredTime,
-//     iat: currentTime,
-//     aud: 'zego',
-//     jti: Math.random().toString(36).substring(2, 15),
-//     user_id: userId
-//   };
-  
-//   const header = { alg: 'HS256', typ: 'JWT' };
-  
-//   const encodedHeader = base64UrlEncode(JSON.stringify(header));
-//   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-  
-//   const signature = crypto
-//     .createHmac('sha256', serverSecret)
-//     .update(`${encodedHeader}.${encodedPayload}`)
-//     .digest('base64')
-//     .replace(/\+/g, '-')
-//     .replace(/\//g, '_')
-//     .replace(/=/g, '');
-  
-//   return `${encodedHeader}.${encodedPayload}.${signature}`;
-// }
-
-// function base64UrlEncode(str) {
-//   return Buffer.from(str)
-//     .toString('base64')
-//     .replace(/\+/g, '-')
-//     .replace(/\//g, '_')
-//     .replace(/=/g, '');
-// }
-
-// // ========================================
-// // 🌐 API ROUTES
-// // ========================================
-
-// // Health check
-// app.get('/api/health', (req, res) => {
-//   res.json({
-//     status: 'OK',
-//     timestamp: new Date().toISOString(),
-//     uptime: process.uptime(),
-//     cloudinary: {
-//       configured: true,
-//       cloudName: cloudinary.config().cloud_name
-//     },
-//     zegocloud: {
-//       configured: !!(ZEGOCLOUD_CONFIG.APP_ID && ZEGOCLOUD_CONFIG.SERVER_SECRET),
-//       appId: ZEGOCLOUD_CONFIG.APP_ID
-//     }
-//   });
-// });
-
-// // ZEGOCLOUD Token Generation
-// app.post('/api/getZegoToken', async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-//     if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ error: 'User not found' });
-
-//     if (!user.zegoUserId) {
-//       user.zegoUserId = `zego_${user._id}`;
-//       await user.save();
-//     }
-
-//     const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
-//     const token = generateZegoToken(
-//       ZEGOCLOUD_CONFIG.APP_ID,
-//       user.zegoUserId,
-//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-//       effectiveTimeInSeconds
-//     );
-
-//     const expiresAt = Date.now() + (effectiveTimeInSeconds * 1000);
-
-//     console.log(`🎫 Zego token generated for ${user.username}`);
-
-//     return res.json({
-//       token,
-//       appId: ZEGOCLOUD_CONFIG.APP_ID,
-//       userId: user.zegoUserId,
-//       expiresIn: effectiveTimeInSeconds,
-//       expiresAt
-//     });
-//   } catch (err) {
-//     console.error('❌ Token generation error:', err);
-//     return res.status(500).json({ error: 'Failed to generate token' });
-//   }
-// });
-
-// // Refresh Token
-// app.post('/api/refreshZegoToken', async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-//     if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ error: 'User not found' });
-
-//     const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
-//     const token = generateZegoToken(
-//       ZEGOCLOUD_CONFIG.APP_ID,
-//       user.zegoUserId,
-//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-//       effectiveTimeInSeconds
-//     );
-
-//     return res.json({
-//       token,
-//       expiresIn: effectiveTimeInSeconds,
-//       userId: user.zegoUserId
-//     });
-//   } catch (err) {
-//     console.error('❌ Refresh token error:', err);
-//     res.status(500).json({ error: 'Failed to refresh token' });
-//   }
-// });
-
-// // ========================================
-// // 📁 FILE UPLOAD ENDPOINTS - PRODUCTION READY
-// // ========================================
-
-// // Profile Picture Upload (Cloudinary)
-// app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     const userId = req.body.userId || req.user.userId;
-    
-//     // Update user profile picture in database
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         profilePic: req.file.path,
-//         updatedAt: new Date()
-//       },
-//       { new: true, select: '-password' }
-//     );
-
-//     if (!updatedUser) {
-//       return res.status(404).json({ 
-//         success: false,
-//         error: 'User not found' 
-//       });
-//     }
-
-//     console.log(`✅ Profile picture updated: ${updatedUser.username} -> ${req.file.path}`);
-
-//     res.json({
-//       success: true,
-//       message: 'Profile picture updated successfully',
-//       url: req.file.path,
-//       publicId: req.file.filename,
-//       user: updatedUser
-//     });
-//   } catch (err) {
-//     console.error('❌ Profile upload error:', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-// // Chat Media Upload (Images, Videos, Documents)
-// app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     console.log(`✅ Chat file uploaded: ${req.file.originalname} -> ${req.file.path}`);
-
-//     // Determine message type based on file mimetype
-//     let messageType = 'file';
-//     if (req.file.mimetype.startsWith('image/')) {
-//       messageType = 'image';
-//     } else if (req.file.mimetype.startsWith('video/')) {
-//       messageType = 'video';
-//     } else if (req.file.mimetype.startsWith('audio/')) {
-//       messageType = 'audio';
-//     }
-
-//     res.json({
-//       success: true,
-//       message: 'File uploaded successfully',
-//       url: req.file.path,
-//       publicId: req.file.filename,
-//       resourceType: req.file.resource_type || 'auto',
-//       originalName: req.file.originalname,
-//       size: req.file.size,
-//       messageType: messageType,
-//       mimetype: req.file.mimetype
-//     });
-//   } catch (err) {
-//     console.error('❌ Chat upload error:', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-// // Multiple Files Upload
-// app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), async (req, res) => {
-//   try {
-//     if (!req.files || req.files.length === 0) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No files uploaded' 
-//       });
-//     }
-
-//     const uploadedFiles = req.files.map(f => {
-//       let messageType = 'file';
-//       if (f.mimetype.startsWith('image/')) messageType = 'image';
-//       else if (f.mimetype.startsWith('video/')) messageType = 'video';
-//       else if (f.mimetype.startsWith('audio/')) messageType = 'audio';
-
-//       return {
-//         url: f.path,
-//         publicId: f.filename,
-//         resourceType: f.resource_type || 'auto',
-//         originalName: f.originalname,
-//         size: f.size,
-//         messageType: messageType,
-//         mimetype: f.mimetype
-//       };
-//     });
-
-//     console.log(`✅ ${uploadedFiles.length} files uploaded successfully`);
-
-//     res.json({ 
-//       success: true, 
-//       message: `${uploadedFiles.length} files uploaded successfully`,
-//       files: uploadedFiles 
-//     });
-//   } catch (err) {
-//     console.error('❌ Multiple upload error:', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-
-
-
-// app.post('/api/upload', authenticateToken, cloudinaryUpload.single('file'), async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     console.log(`✅ File uploaded via /api/upload (Cloudinary): ${req.file.originalname} -> ${req.file.path}`);
-
-//     const { type = 'general', userId } = req.body;
-    
-//     // Determine message type based on file mimetype
-//     let messageType = 'file';
-//     if (req.file.mimetype.startsWith('image/')) {
-//       messageType = 'image';
-//       // If it's a profile upload, update the user profilePic
-//       if (type === 'profile') {
-//         const updatedUser = await User.findByIdAndUpdate(
-//           userId || req.user.userId,
-//           { profilePic: req.file.path, updatedAt: new Date() },
-//           { new: true, select: '-password' }
-//         );
-//         if (!updatedUser) {
-//            console.warn('⚠️ Could not update user profilePic for ID:', userId || req.user.userId);
-//         }
-//       }
-//     } else if (req.file.mimetype.startsWith('video/')) {
-//       messageType = 'video';
-//     } else if (req.file.mimetype.startsWith('audio/')) {
-//       messageType = 'audio';
-//     }
-
-//     res.json({
-//       success: true,
-//       message: 'File uploaded successfully to Cloudinary',
-//       // Ensure you return the 'fileUrl' key which the front-end might expect from the old local upload
-//       fileUrl: req.file.path, 
-//       filename: req.file.filename,
-//       originalName: req.file.originalname,
-//       size: req.file.size,
-//       type: type,
-//       messageType: messageType
-//     });
-//   } catch (err) {
-//     console.error('❌ Cloudinary Upload (via /api/upload) error:', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: 'File upload failed to Cloudinary: ' + err.message
-//     });
-//   }
-// });
-
-// // Backup Endpoint
-// app.get('/api/backup/:userId', authenticateToken, async (req, res) => {
-//   try {
-//     const { userId } = req.params;
-    
-//     if (req.user.userId !== userId && req.user.role !== 'admin') {
-//       return res.status(403).json({ error: 'Access denied' });
-//     }
-
-//     const messages = await Message.find({
-//       $or: [{ sender: userId }, { recipient: userId }]
-//     }).populate('sender', 'name username')
-//       .populate('recipient', 'name username')
-//       .populate('group', 'name');
-
-//     const groups = await Group.find({
-//       members: userId
-//     }).populate('members', 'name username');
-
-//     const backupData = {
-//       userId: userId,
-//       timestamp: new Date().toISOString(),
-//       messages: messages,
-//       groups: groups
-//     };
-
-//     const backupJson = JSON.stringify(backupData, null, 2);
-//     const backupFileName = `backup-${userId}-${Date.now()}.json`;
-//     const backupPath = path.join(uploadsDir, backupFileName);
-
-//     fs.writeFileSync(backupPath, backupJson);
-
-//     const result = await cloudinary.uploader.upload(backupPath, {
-//       resource_type: 'raw',
-//       folder: 'HiChatBackups',
-//       public_id: backupFileName.replace('.json', '')
-//     });
-
-//     fs.unlinkSync(backupPath);
-
-//     console.log(`✅ Backup created for user: ${userId}`);
-
-//     res.json({
-//       success: true,
-//       message: 'Backup created successfully',
-//       backupUrl: result.secure_url,
-//       backupSize: backupJson.length,
-//       messageCount: messages.length,
-//       groupCount: groups.length
-//     });
-//   } catch (err) {
-//     console.error('❌ Backup error:', err);
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-//New Code Again For testing
-
-
-// const express = require('express');
-// const cors = require('cors');
-// const bcrypt = require('bcryptjs');
-// const jwt = require('jsonwebtoken');
-// const mongoose = require('mongoose');
-// const multer = require('multer');
-// const path = require('path');
-// const fs = require('fs');
-// const { v2: cloudinary } = require('cloudinary');
-// const { CloudinaryStorage } = require('multer-storage-cloudinary');
-// const crypto = require('crypto');
-// const rateLimit = require('express-rate-limit');
-// const compression = require('compression');
-// const morgan = require('morgan');
-// require('dotenv').config();
-
-// const app = express();
-
-// // ========================================
-// // 🔧 MIDDLEWARE SETUP
-// // ========================================
-
-// app.use(compression());
-// app.use(morgan('combined'));
-
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000,
-//   max: Number.MAX_SAFE_INTEGER,
-//   message: 'Too many requests from this IP, please try again later.'
-// });
-
-// app.use('/api/', limiter);
-
-// app.use(cors({
-//   origin: process.env.FRONTEND_URL || '*',
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
-
-// app.use(express.json({ limit: '50mb' }));
-// app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-// app.use('/uploads', express.static('uploads'));
-
-// // ========================================
-// // 📁 CLOUDINARY CONFIGURATION
-// // ========================================
-
-// cloudinary.config({
-//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dafmi1nyb',
-//   api_key: process.env.CLOUDINARY_API_KEY || '328393763333636',
-//   api_secret: process.env.CLOUDINARY_API_SECRET || 'Tra1d9sGSDHul1VP2DWCXvM0lzs',
-// });
-
-// console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
-
-// // ========================================
-// // 📁 FILE UPLOAD CONFIGURATION
-// // ========================================
-
-// const cloudinaryStorage = new CloudinaryStorage({
-//   cloudinary: cloudinary,
-//   params: async (req, file) => {
-//     let resourceType = 'auto';
-//     if (file.mimetype.startsWith('video/')) resourceType = 'video';
-//     else if (file.mimetype.startsWith('image/')) resourceType = 'image';
-//     else resourceType = 'raw';
-
-//     // Use a specific, clear folder structure in Cloudinary
-//     let folder = 'HiChat'; 
-//     if (file.fieldname === 'file') {
-//         if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
-//         else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
-//         else if (file.mimetype.includes('pdf') || file.mimetype.includes('document') || file.mimetype.includes('text')) {
-//              folder = 'HiChat/documents';
-//         }
-//     } else {
-//         // Fallback for other file fields if any (e.g., if you later add an audio field)
-//         folder = 'HiChat/others';
-//     }
-
-//     return {
-//       folder: folder,
-//       resource_type: resourceType,
-//       allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
-//       public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-//     };
-//   }
-// });
-
-// const cloudinaryUpload = multer({
-//   storage: cloudinaryStorage,
-//   limits: { fileSize: 100 * 1024 * 1024, files: 10 },
-//   fileFilter: (req, file, cb) => {
-//     const allowedMimes = [
-//       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-//       'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
-//       'application/pdf', 'application/msword',
-//       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-//       'text/plain'
-//     ];
-//     if (allowedMimes.includes(file.mimetype)) cb(null, true);
-//     else cb(new Error(`Invalid file type: ${file.mimetype}`));
-//   }
-// });
-
-// // Local storage fallback
-// const uploadsDir = path.join(__dirname, 'uploads');
-// if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-// const localStorage = multer.diskStorage({
-//   destination: (req, file, cb) => cb(null, uploadsDir),
-//   filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
-// });
-
-// const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
-
-// // ========================================
-// // 🔑 ZEGOCLOUD CONFIGURATION
-// // ========================================
-
-// const ZEGOCLOUD_CONFIG = {
-//   APP_ID: parseInt(process.env.ZEGO_APP_ID) || 640953410,
-//   SERVER_SECRET: process.env.ZEGO_SERVER_SECRET || '3127e2f085cf98a0118601e8f6ad13e7',
-//   TOKEN_EXPIRY: 24 * 60 * 60
-// };
-
-// // ========================================
-// // 🗄️ DATABASE CONNECTION
-// // ========================================
-
-// const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hichat';
-
-// mongoose.connect(MONGODB_URI, {
-//   useNewUrlParser: true,
-//   useUnifiedTopology: true,
-// })
-// .then(() => console.log('✅ Connected to MongoDB'))
-// .catch((error) => {
-//   console.error('❌ MongoDB connection error:', error);
-//   process.exit(1);
-// });
-
-// // ========================================
-// // 📊 DATABASE MODELS
-// // ========================================
-
-// const userSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   username: { type: String, required: true, unique: true },
-//   email: { type: String, required: true, unique: true },
-//   password: { type: String, required: true },
-//   role: { type: String, enum: ['user', 'admin'], default: 'user' },
-//   profilePic: { type: String, default: '' },
-//   isOnline: { type: Boolean, default: false },
-//   lastSeen: { type: Date, default: Date.now },
-//   zegoUserId: { type: String, unique: true, sparse: true },
-//   createdAt: { type: Date, default: Date.now },
-//   updatedAt: { type: Date, default: Date.now }
-// });
-
-// const groupSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   description: { type: String, default: '' },
-//   profilePic: { type: String, default: '' },
-//   members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-//   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-//   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   zegoGroupId: { type: String, unique: true, sparse: true },
-//   createdAt: { type: Date, default: Date.now },
-//   updatedAt: { type: Date, default: Date.now }
-// });
-
-// const messageSchema = new mongoose.Schema({
-//   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-//   recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-//   group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
-//   content: { type: String, default: '' },
-//   messageType: { type: String, enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
-//   fileUrl: { type: String },
-//   fileName: { type: String },
-//   fileSize: { type: Number },
-//   zegoMessageId: { type: String },
-//   timestamp: { type: Date, default: Date.now }
-// });
-
-// const User = mongoose.model('User', userSchema);
-// const Group = mongoose.model('Group', groupSchema);
-// const Message = mongoose.model('Message', messageSchema);
-
-// // ========================================
-// // 🔐 AUTHENTICATION MIDDLEWARE
-// // ========================================
-
-// const authenticateToken = (req, res, next) => {
-//   const authHeader = req.headers['authorization'];
-//   const token = authHeader && authHeader.split(' ')[1];
-
-//   if (!token) {
-//     return res.status(401).json({ error: 'Access token required' });
-//   }
-
-//   jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-//     if (err) {
-//       return res.status(403).json({ error: 'Invalid or expired token' });
-//     }
-//     req.user = user;
-//     next();
-//   });
-// };
-
-// // ========================================
-// // 🎯 ZEGOCLOUD TOKEN GENERATION
-// // ========================================
-
-// function generateZegoToken(appId, userId, serverSecret, effectiveTimeInSeconds) {
-//   const currentTime = Math.floor(Date.now() / 1000);
-//   const expiredTime = currentTime + effectiveTimeInSeconds;
-  
-//   const payload = {
-//     iss: appId,
-//     exp: expiredTime,
-//     iat: currentTime,
-//     aud: 'zego',
-//     jti: Math.random().toString(36).substring(2, 15),
-//     user_id: userId
-//   };
-  
-//   const header = { alg: 'HS256', typ: 'JWT' };
-  
-//   const encodedHeader = base64UrlEncode(JSON.stringify(header));
-//   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-  
-//   const signature = crypto
-//     .createHmac('sha256', serverSecret)
-//     .update(`${encodedHeader}.${encodedPayload}`)
-//     .digest('base64')
-//     .replace(/\+/g, '-')
-//     .replace(/\//g, '_')
-//     .replace(/=/g, '');
-  
-//   return `${encodedHeader}.${encodedPayload}.${signature}`;
-// }
-
-// function base64UrlEncode(str) {
-//   return Buffer.from(str)
-//     .toString('base64')
-//     .replace(/\+/g, '-')
-//     .replace(/\//g, '_')
-//     .replace(/=/g, '');
-// }
-
-// // ========================================
-// // 🌐 API ROUTES
-// // ========================================
-
-// // Health check
-// app.get('/api/health', (req, res) => {
-//   res.json({
-//     status: 'OK',
-//     timestamp: new Date().toISOString(),
-//     uptime: process.uptime(),
-//     cloudinary: {
-//       configured: true,
-//       cloudName: cloudinary.config().cloud_name
-//     },
-//     zegocloud: {
-//       configured: !!(ZEGOCLOUD_CONFIG.APP_ID && ZEGOCLOUD_CONFIG.SERVER_SECRET),
-//       appId: ZEGOCLOUD_CONFIG.APP_ID
-//     }
-//   });
-// });
-
-// // ZEGOCLOUD Token Generation
-// app.post('/api/getZegoToken', async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-//     if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ error: 'User not found' });
-
-//     if (!user.zegoUserId) {
-//       user.zegoUserId = `zego_${user._id}`;
-//       await user.save();
-//     }
-
-//     const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
-//     const token = generateZegoToken(
-//       ZEGOCLOUD_CONFIG.APP_ID,
-//       user.zegoUserId,
-//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-//       effectiveTimeInSeconds
-//     );
-
-//     const expiresAt = Date.now() + (effectiveTimeInSeconds * 1000);
-
-//     console.log(`🎫 Zego token generated for ${user.username}`);
-
-//     return res.json({
-//       token,
-//       appId: ZEGOCLOUD_CONFIG.APP_ID,
-//       userId: user.zegoUserId,
-//       expiresIn: effectiveTimeInSeconds,
-//       expiresAt
-//     });
-//   } catch (err) {
-//     console.error('❌ Token generation error:', err);
-//     return res.status(500).json({ error: 'Failed to generate token' });
-//   }
-// });
-
-// // Refresh Token
-// app.post('/api/refreshZegoToken', async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-//     if (!userId) return res.status(400).json({ error: 'userId is required' });
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ error: 'User not found' });
-
-//     const effectiveTimeInSeconds = (24 * 60 * 60) - 30;
-//     const token = generateZegoToken(
-//       ZEGOCLOUD_CONFIG.APP_ID,
-//       user.zegoUserId,
-//       ZEGOCLOUD_CONFIG.SERVER_SECRET,
-//       effectiveTimeInSeconds
-//     );
-
-//     return res.json({
-//       token,
-//       expiresIn: effectiveTimeInSeconds,
-//       userId: user.zegoUserId
-//     });
-//   } catch (err) {
-//     console.error('❌ Refresh token error:', err);
-//     res.status(500).json({ error: 'Failed to refresh token' });
-//   }
-// });
-
-// // ========================================
-// // 🚨 MULTER/CLOUDINARY ERROR HANDLER (CRITICAL DEBUG TOOL)
-// // ========================================
-// const uploadErrorHandler = (err, req, res, next) => {
-//     if (err instanceof multer.MulterError) {
-//         // Multer specific error (e.g., file size limit, too many files)
-//         console.error('❌ Multer Error:', err.code, err.message);
-//         return res.status(400).json({ 
-//             success: false, 
-//             error: `Upload failed (Multer): ${err.message}` 
-//         });
-//     } else if (err) {
-//         // Generic error (This is where Cloudinary API errors usually land)
-//         console.error('❌ Cloudinary Upload Failed:', err.message, err.stack);
-//         return res.status(500).json({ 
-//             success: false, 
-//             error: `Cloudinary/Server error: ${err.message}` 
-//         });
-//     }
-//     next();
-// };
-
-// // ========================================
-// // 📁 FILE UPLOAD ENDPOINTS - PRODUCTION READY
-// // ========================================
-
-// // Profile Picture Upload (Cloudinary)
-// app.post('/api/cloudinary/profile', authenticateToken, cloudinaryUpload.single('file'), uploadErrorHandler, async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     const userId = req.body.userId || req.user.userId;
-    
-//     // Update user profile picture in database
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         profilePic: req.file.path,
-//         updatedAt: new Date()
-//       },
-//       { new: true, select: '-password' }
-//     );
-
-//     if (!updatedUser) {
-//       return res.status(404).json({ 
-//         success: false,
-//         error: 'User not found' 
-//       });
-//     }
-
-//     console.log(`✅ Profile picture updated: ${updatedUser.username} -> ${req.file.path}`);
-
-//     res.json({
-//       success: true,
-//       message: 'Profile picture updated successfully',
-//       url: req.file.path,
-//       publicId: req.file.filename,
-//       user: updatedUser
-//     });
-//   } catch (err) {
-//     console.error('❌ Profile upload error (Post-Cloudinary):', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-// // Chat Media Upload (Images, Videos, Documents)
-// app.post('/api/cloudinary/chat', authenticateToken, cloudinaryUpload.single('file'), uploadErrorHandler, async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     console.log(`✅ Chat file uploaded: ${req.file.originalname} -> ${req.file.path}`);
-
-//     // Determine message type based on file mimetype
-//     let messageType = 'file';
-//     if (req.file.mimetype.startsWith('image/')) {
-//       messageType = 'image';
-//     } else if (req.file.mimetype.startsWith('video/')) {
-//       messageType = 'video';
-//     } else if (req.file.mimetype.startsWith('audio/')) {
-//       messageType = 'audio';
-//     }
-
-//     res.json({
-//       success: true,
-//       message: 'File uploaded successfully',
-//       url: req.file.path,
-//       publicId: req.file.filename,
-//       resourceType: req.file.resource_type || 'auto',
-//       originalName: req.file.originalname,
-//       size: req.file.size,
-//       messageType: messageType,
-//       mimetype: req.file.mimetype
-//     });
-//   } catch (err) {
-//     console.error('❌ Chat upload error (Post-Cloudinary):', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-// // Multiple Files Upload
-// app.post('/api/cloudinary/multiple', authenticateToken, cloudinaryUpload.array('files', 10), uploadErrorHandler, async (req, res) => {
-//   try {
-//     if (!req.files || req.files.length === 0) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No files uploaded' 
-//       });
-//     }
-
-//     const uploadedFiles = req.files.map(f => {
-//       let messageType = 'file';
-//       if (f.mimetype.startsWith('image/')) messageType = 'image';
-//       else if (f.mimetype.startsWith('video/')) messageType = 'video';
-//       else if (f.mimetype.startsWith('audio/')) messageType = 'audio';
-
-//       return {
-//         url: f.path,
-//         publicId: f.filename,
-//         resourceType: f.resource_type || 'auto',
-//         originalName: f.originalname,
-//         size: f.size,
-//         messageType: messageType,
-//         mimetype: f.mimetype
-//       };
-//     });
-
-//     console.log(`✅ ${uploadedFiles.length} files uploaded successfully`);
-
-//     res.json({ 
-//       success: true, 
-//       message: `${uploadedFiles.length} files uploaded successfully`,
-//       files: uploadedFiles 
-//     });
-//   } catch (err) {
-//     console.error('❌ Multiple upload error (Post-Cloudinary):', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: err.message 
-//     });
-//   }
-// });
-
-// // Cloudinary Upload (Replacing the local /api/upload endpoint)
-// app.post('/api/upload', authenticateToken, cloudinaryUpload.single('file'), uploadErrorHandler, async (req, res) => {
-//   try {
-//     if (!req.file) {
-//       return res.status(400).json({ 
-//         success: false,
-//         error: 'No file uploaded' 
-//       });
-//     }
-
-//     console.log(`✅ File uploaded via /api/upload (Cloudinary): ${req.file.originalname} -> ${req.file.path}`);
-
-//     const { type = 'general', userId } = req.body;
-    
-//     // Determine message type based on file mimetype
-//     let messageType = 'file';
-//     if (req.file.mimetype.startsWith('image/')) {
-//       messageType = 'image';
-//       // If it's a profile upload, update the user profilePic
-//       if (type === 'profile') {
-//         const updatedUser = await User.findByIdAndUpdate(
-//           userId || req.user.userId,
-//           { profilePic: req.file.path, updatedAt: new Date() },
-//           { new: true, select: '-password' }
-//         );
-//         if (!updatedUser) {
-//            console.warn('⚠️ Could not update user profilePic for ID:', userId || req.user.userId);
-//         }
-//       }
-//     } else if (req.file.mimetype.startsWith('video/')) {
-//       messageType = 'video';
-//     } else if (req.file.mimetype.startsWith('audio/')) {
-//       messageType = 'audio';
-//     }
-
-//     res.json({
-//       success: true,
-//       message: 'File uploaded successfully to Cloudinary',
-//       // Ensure you return the 'fileUrl' key which the front-end might expect from the old local upload
-//       fileUrl: req.file.path, 
-//       filename: req.file.filename,
-//       originalName: req.file.originalname,
-//       size: req.file.size,
-//       type: type,
-//       messageType: messageType
-//     });
-//   } catch (err) {
-//     console.error('❌ Cloudinary Upload (via /api/upload) error (Post-Cloudinary):', err);
-//     res.status(500).json({ 
-//       success: false,
-//       error: 'File upload failed to Cloudinary: ' + err.message
-//     });
-//   }
-// });
-
-
-
-//Again Once More 
-
-
-
+//Hi Chat Backend Completed
 
 const express = require('express');
 const cors = require('cors');
@@ -1208,17 +48,129 @@ app.use('/uploads', express.static('uploads'));
 // 📁 CLOUDINARY CONFIGURATION (Removed fallbacks, MUST USE ENV)
 // ========================================
 
+// cloudinary.config({
+//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+//   api_key: process.env.CLOUDINARY_API_KEY,
+//   api_secret: process.env.CLOUDINARY_API_SECRET,
+// });
+
+// // Check if critical Cloudinary settings are missing
+// if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+//     console.warn('⚠️ WARNING: CLOUDINARY ENVIRONMENT VARIABLES ARE NOT FULLY SET. Uploads will fail until configured.');
+// } else {
+//     console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
+// }
+
+// // ========================================
+// // 📁 FILE UPLOAD CONFIGURATION
+// // ========================================
+
+// const cloudinaryStorage = new CloudinaryStorage({
+//   cloudinary: cloudinary,
+//   params: async (req, file) => {
+//     let resourceType = 'auto';
+//     if (file.mimetype.startsWith('video/')) resourceType = 'video';
+//     else if (file.mimetype.startsWith('image/')) resourceType = 'image';
+//     else resourceType = 'raw';
+
+//     // Use a specific, clear folder structure in Cloudinary
+//     let folder = 'HiChat'; 
+//     if (file.fieldname === 'file') {
+//         if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
+//         else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
+//         else if (file.mimetype.includes('pdf') || file.mimetype.includes('document') || file.mimetype.includes('text')) {
+//              folder = 'HiChat/documents';
+//         }
+//     } else {
+//         // Fallback for other file fields if any (e.g., if you later add an audio field)
+//         folder = 'HiChat/others';
+//     }
+
+//     return {
+//       folder: folder,
+//       resource_type: resourceType,
+//       allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
+//       public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+//     };
+//   }
+// });
+
+// const cloudinaryUpload = multer({
+//   storage: cloudinaryStorage,
+//   limits: { fileSize: 100 * 1024 * 1024, files: 10 },
+//   fileFilter: (req, file, cb) => {
+//     // List of allowed MIME types (preferred method)
+//     const allowedMimes = [
+//       'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+//       'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
+//       'application/pdf', 'application/msword',
+//       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+//       'text/plain'
+//     ];
+
+//     // List of allowed extensions (fallback for generic octet-stream)
+//     const allowedExts = [
+//         '.jpg', '.jpeg', '.png', '.gif', 
+//         '.mp4', '.mov', '.avi', '.webm', 
+//         '.pdf', '.doc', '.docx', '.txt'
+//     ];
+    
+//     // 1. Check if the MIME type is explicitly allowed
+//     if (allowedMimes.includes(file.mimetype)) {
+//       cb(null, true);
+//     } 
+//     // 2. Check for the generic binary type (application/octet-stream) and use extension fallback
+//     else if (file.mimetype === 'application/octet-stream' || file.mimetype === 'application/x-empty') {
+//         const ext = path.extname(file.originalname || '').toLowerCase();
+        
+//         if (allowedExts.includes(ext)) {
+//             console.log(`⚠️ Octet-stream or generic file detected for: ${file.originalname}. Allowing based on extension: ${ext}`);
+//             cb(null, true);
+//         } else {
+//             // Reject if the extension is also unsupported
+//             cb(new Error(`Invalid file type: ${file.mimetype}. Rejected due to unknown or missing extension: ${ext}`));
+//         }
+//     }
+//     // 3. Reject all other unsupported MIME types
+//     else {
+//       cb(new Error(`Invalid file type: ${file.mimetype}`));
+//     }
+//   }
+// });
+
+// // Local storage fallback
+// const uploadsDir = path.join(__dirname, 'uploads');
+// if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+// const localStorage = multer.diskStorage({
+//   destination: (req, file, cb) => cb(null, uploadsDir),
+//   filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
+// });
+
+// const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+
+
+
+
+
+
+
+// ========================================
+// 🌩️ CLOUDINARY CONFIGURATION
+// ========================================
+
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Check if critical Cloudinary settings are missing
+// Check Cloudinary ENV
 if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-    console.warn('⚠️ WARNING: CLOUDINARY ENVIRONMENT VARIABLES ARE NOT FULLY SET. Uploads will fail until configured.');
+  console.warn('⚠️ WARNING: CLOUDINARY ENVIRONMENT VARIABLES ARE NOT FULLY SET. Uploads will fail until configured.');
 } else {
-    console.log('✅ Cloudinary configured:', cloudinary.config().cloud_name);
+  console.log('✅ Cloudinary configured for:', cloudinary.config().cloud_name);
 }
 
 // ========================================
@@ -1226,88 +178,121 @@ if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !pr
 // ========================================
 
 const cloudinaryStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    let resourceType = 'auto';
-    if (file.mimetype.startsWith('video/')) resourceType = 'video';
-    else if (file.mimetype.startsWith('image/')) resourceType = 'image';
-    else resourceType = 'raw';
+  cloudinary,
+  params: async (req, file) => {
+    let resourceType = 'auto';
+    if (file.mimetype.startsWith('video/')) resourceType = 'video';
+    else if (file.mimetype.startsWith('image/')) resourceType = 'image';
+    else if (file.mimetype.startsWith('audio/')) resourceType = 'video'; // Cloudinary treats audio under video
+    else resourceType = 'raw';
 
-    // Use a specific, clear folder structure in Cloudinary
-    let folder = 'HiChat'; 
-    if (file.fieldname === 'file') {
-        if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
-        else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
-        else if (file.mimetype.includes('pdf') || file.mimetype.includes('document') || file.mimetype.includes('text')) {
-             folder = 'HiChat/documents';
-        }
+    // Determine folder dynamically
+    let folder = 'HiChat';
+
+    if (file.fieldname === 'profilePic') folder = 'HiChat/profile_pics';
+    else if (file.mimetype.startsWith('image/')) folder = 'HiChat/images';
+    else if (file.mimetype.startsWith('video/')) folder = 'HiChat/videos';
+    else if (file.mimetype.startsWith('audio/')) folder = 'HiChat/audio';
+    else if (
+      file.mimetype.includes('pdf') ||
+      file.mimetype.includes('word') ||
+      file.mimetype.includes('excel') ||
+      file.mimetype.includes('csv') ||
+      file.mimetype.includes('text') ||
+      file.mimetype.includes('powerpoint')
+    ) folder = 'HiChat/documents';
+    else if (file.mimetype.includes('json') || file.mimetype.includes('javascript') || file.mimetype.includes('html')) {
+      folder = 'HiChat/code_files';
     } else {
-        // Fallback for other file fields if any (e.g., if you later add an audio field)
-        folder = 'HiChat/others';
+      folder = 'HiChat/others';
     }
 
-    return {
-      folder: folder,
-      resource_type: resourceType,
-      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi', 'webm', 'pdf', 'doc', 'docx', 'txt'],
-      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
-    };
-  }
+    return {
+      folder,
+      resource_type: resourceType,
+      allowed_formats: [
+        // Images
+        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp', 'heic', 'svg',
+        // Videos
+        'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv',
+        // Audio
+        'mp3', 'wav', 'm4a', 'aac', 'ogg',
+        // Documents
+        'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'csv', 'rtf',
+        // Code / Config
+        'json', 'js', 'ts', 'html', 'css', 'xml', 'yml', 'yaml', 'md',
+        // Others
+        'zip', 'rar'
+      ],
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+    };
+  },
 });
+
+// ========================================
+// 🚀 MULTER UPLOAD WITH ADVANCED FILTERS
+// ========================================
+
+const allowedMimes = [
+  // Images
+  'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp', 'image/heic', 'image/svg+xml',
+  // Videos
+  'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm', 'video/x-flv', 'video/x-ms-wmv',
+  // Audio
+  'audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg',
+  // Documents
+  'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv', 'application/rtf',
+  // Code / Config
+  'application/json', 'application/javascript', 'text/html', 'text/css', 'application/xml', 'text/markdown',
+  // Others
+  'application/zip', 'application/x-rar-compressed'
+];
+
+const allowedExts = [
+  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.svg',
+  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv',
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg',
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.csv', '.rtf',
+  '.json', '.js', '.ts', '.html', '.css', '.xml', '.yml', '.yaml', '.md',
+  '.zip', '.rar'
+];
 
 const cloudinaryUpload = multer({
-  storage: cloudinaryStorage,
-  limits: { fileSize: 100 * 1024 * 1024, files: 10 },
-  fileFilter: (req, file, cb) => {
-    // List of allowed MIME types (preferred method)
-    const allowedMimes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
-      'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
-      'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
-    ];
-
-    // List of allowed extensions (fallback for generic octet-stream)
-    const allowedExts = [
-        '.jpg', '.jpeg', '.png', '.gif', 
-        '.mp4', '.mov', '.avi', '.webm', 
-        '.pdf', '.doc', '.docx', '.txt'
-    ];
-    
-    // 1. Check if the MIME type is explicitly allowed
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } 
-    // 2. Check for the generic binary type (application/octet-stream) and use extension fallback
+  storage: cloudinaryStorage,
+  limits: { fileSize: 200 * 1024 * 1024, files: 10 }, // Increased limit for videos
+  fileFilter: (req, file, cb) => {
+    if (allowedMimes.includes(file.mimetype)) cb(null, true);
     else if (file.mimetype === 'application/octet-stream' || file.mimetype === 'application/x-empty') {
-        const ext = path.extname(file.originalname || '').toLowerCase();
-        
-        if (allowedExts.includes(ext)) {
-            console.log(`⚠️ Octet-stream or generic file detected for: ${file.originalname}. Allowing based on extension: ${ext}`);
-            cb(null, true);
-        } else {
-            // Reject if the extension is also unsupported
-            cb(new Error(`Invalid file type: ${file.mimetype}. Rejected due to unknown or missing extension: ${ext}`));
-        }
-    }
-    // 3. Reject all other unsupported MIME types
-    else {
-      cb(new Error(`Invalid file type: ${file.mimetype}`));
-    }
-  }
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      if (allowedExts.includes(ext)) {
+        console.log(`⚠️ Octet-stream detected for: ${file.originalname}. Allowing based on extension: ${ext}`);
+        cb(null, true);
+      } else cb(new Error(`Invalid file type (octet-stream) - ${ext} not allowed.`));
+    } else cb(new Error(`Invalid file type: ${file.mimetype}`));
+  },
 });
 
-// Local storage fallback
+// ========================================
+// 💾 LOCAL STORAGE FALLBACK (optional)
+// ========================================
+
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const localStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`)
 });
 
-const uploadLocal = multer({ storage: localStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const uploadLocal = multer({
+  storage: localStorage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
 
 // ========================================
 // 🔑 ZEGOCLOUD CONFIGURATION (Removed fallbacks, MUST USE ENV)
