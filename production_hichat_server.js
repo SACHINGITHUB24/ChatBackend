@@ -14,6 +14,8 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
+const axios = require("axios");
+const { Readable } = require("stream");
 require('dotenv').config();
 
 const app = express();
@@ -335,7 +337,13 @@ const userSchema = new mongoose.Schema({
   lastSeen: { type: Date, default: Date.now },
   zegoUserId: { type: String, unique: true, sparse: true },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+
+    //This is Backup Testing 
+  lastBackup: {
+  url: String,
+  date: Date,
+}
 });
 
 const groupSchema = new mongoose.Schema({
@@ -1516,6 +1524,90 @@ app.put('/api/admin/users/:userId/role', authenticateToken, async (req, res) => 
     res.status(500).json({ error: 'Role update failed' });
   }
 });
+
+
+
+
+
+
+
+//Backup Testing or Wokring Dont Know Just Seeing how it will work if It work then its good 
+
+
+
+
+app.post("/api/backup/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    // 1️⃣ Fetch all user data (adjust collections as per your schema)
+    const user = await User.findById(userId).lean();
+    const chats = await Chat.find({ participants: userId }).lean();
+    const messages = await Message.find({ sender: userId }).lean();
+
+    const backupData = { user, chats, messages, createdAt: new Date() };
+
+    // 2️⃣ Create a temporary JSON file in memory
+    const backupJSON = JSON.stringify(backupData, null, 2);
+    const stream = Readable.from([backupJSON]);
+
+    // 3️⃣ Upload JSON to Cloudinary
+    const uploadResponse = await cloudinary.uploader.upload_stream(
+      { resource_type: "raw", folder: "hichat_backups", public_id: `backup_${userId}_${Date.now()}.json` },
+      async (error, result) => {
+        if (error) return res.status(500).json({ message: "Backup upload failed", error });
+
+        // 4️⃣ Save backup URL in user’s record
+        user.lastBackup = {
+          url: result.secure_url,
+          date: new Date(),
+        };
+        await User.findByIdAndUpdate(userId, { $set: { lastBackup: user.lastBackup } });
+
+        res.json({ message: "Backup created successfully!", backupUrl: result.secure_url });
+      }
+    );
+
+    stream.pipe(uploadResponse);
+  } catch (err) {
+    res.status(500).json({ message: "Backup failed", error: err.message });
+  }
+});
+
+
+app.get("/api/restore/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const user = await User.findById(userId);
+    if (!user?.lastBackup?.url) {
+      return res.status(404).json({ message: "No backup found for this user" });
+    }
+
+    // 1️⃣ Download JSON from Cloudinary
+    const response = await axios.get(user.lastBackup.url);
+    const backupData = response.data;
+
+    // 2️⃣ Restore user, chats, messages
+    await Chat.deleteMany({ participants: userId });
+    await Message.deleteMany({ sender: userId });
+
+    await Chat.insertMany(backupData.chats);
+    await Message.insertMany(backupData.messages);
+
+    res.json({ message: "Backup restored successfully!" });
+  } catch (err) {
+    res.status(500).json({ message: "Restore failed", error: err.message });
+  }
+});
+
+
+
+
+
+
+
+
 
 // ========================================
 // 🚀 SERVER STARTUP
