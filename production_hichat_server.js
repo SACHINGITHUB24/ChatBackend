@@ -1606,24 +1606,52 @@ app.get("/api/restore/:userId", async (req, res) => {
 //Profile Picture
 
 
-app.post("/api/users/:userId/profile", upload.single("image"), async (req, res) => {
+// app.post("/api/users/:userId/profile", cloudinaryUpload.single("image"), async (req, res) => {
+//   try {
+//     const userId = req.params.userId;
+
+//     const result = await cloudinary.v2.uploader.upload(req.file.path, {
+//       folder: "hichat/profile_pics",
+//       resource_type: "image",
+//     });
+
+//     await User.findByIdAndUpdate(userId, { profilePic: result.secure_url });
+//     fs.unlinkSync(req.file.path); // remove local temp file
+
+//     res.json({ message: "Profile updated", url: result.secure_url });
+//   } catch (error) {
+//     res.status(500).json({ message: "Upload failed", error });
+//   }
+// });
+
+
+
+
+app.post("/api/users/:userId/profile", cloudinaryUpload.single("image"), async (req, res) => {
   try {
     const userId = req.params.userId;
 
-    const result = await cloudinary.v2.uploader.upload(req.file.path, {
-      folder: "hichat/profile_pics",
-      resource_type: "image",
+    // If file not found
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // File is already uploaded to Cloudinary by Multer
+    const imageUrl = req.file.path;
+
+    // Update user's profilePic field in MongoDB
+    await User.findByIdAndUpdate(userId, { profilePic: imageUrl });
+
+    res.json({
+      success: true,
+      message: "Profile picture updated successfully",
+      url: imageUrl,
     });
-
-    await User.findByIdAndUpdate(userId, { profilePic: result.secure_url });
-    fs.unlinkSync(req.file.path); // remove local temp file
-
-    res.json({ message: "Profile updated", url: result.secure_url });
   } catch (error) {
-    res.status(500).json({ message: "Upload failed", error });
+    console.error("❌ Profile upload failed:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 
 
