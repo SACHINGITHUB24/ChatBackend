@@ -1603,6 +1603,28 @@ app.get("/api/restore/:userId", async (req, res) => {
 
 
 
+//Profile Picture
+
+
+app.post("/api/users/:userId/profile", upload.single("image"), async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const result = await cloudinary.v2.uploader.upload(req.file.path, {
+      folder: "hichat/profile_pics",
+      resource_type: "image",
+    });
+
+    await User.findByIdAndUpdate(userId, { profilePic: result.secure_url });
+    fs.unlinkSync(req.file.path); // remove local temp file
+
+    res.json({ message: "Profile updated", url: result.secure_url });
+  } catch (error) {
+    res.status(500).json({ message: "Upload failed", error });
+  }
+});
+
+
 
 
 
