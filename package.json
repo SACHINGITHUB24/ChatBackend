@@ -38,7 +38,9 @@
     "uuid": "^9.0.0",
     "crypto": "^1.0.1",
     "cloudinary": "^1.41.0",
-    "multer-storage-cloudinary": "^4.0.0"
+    "multer-storage-cloudinary": "^4.0.0",
+    "axios": "^1.12.2",
+    "stream":"^0.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
