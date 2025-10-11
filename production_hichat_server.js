@@ -2495,51 +2495,45 @@ app.post("/api/users/:userId/profile", cloudinaryUpload.single("image"), async (
 
 //First Admin without any error
 
-app.post('/api/admin/setup', async (req, res) => {
+
+// ========================================
+// AUTO ADMIN CREATION - ADD THIS AFTER YOUR MODELS
+// ========================================
+
+// Function to create default admin if none exists
+async function ensureAdminExists() {
   try {
-    // Check if ANY users exist
-    const userCount = await User.countDocuments();
-    if (userCount > 0) {
-      return res.status(403).json({ 
-        error: 'System already initialized. Cannot create admin.' 
+    const adminCount = await User.countDocuments({ role: 'admin' });
+    
+    if (adminCount === 0) {
+      console.log('🔐 No admin found. Creating default admin...');
+      
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      
+      const adminUser = new User({
+        name: 'Admin User',
+        username: 'admin',
+        email: 'admin@hichat.com',
+        password: hashedPassword,
+        role: 'admin',
+        zegoUserId: `zego_admin_${new mongoose.Types.ObjectId()}`
       });
+      
+      const savedAdmin = await adminUser.save();
+      
+      console.log('✅ Default admin created successfully!');
+      console.log('📝 Admin Credentials:');
+      console.log('   Username: admin');
+      console.log('   Email: admin@hichat.com');
+      console.log('   Password: admin123');
+      console.log('⚠️  IMPORTANT: Change this password after first login!');
+    } else {
+      console.log('✅ Admin user already exists. Skipping creation.');
     }
-
-    const { name, username, email, password } = req.body;
-    
-    if (!name || !username || !email || !password) {
-      return res.status(400).json({ error: 'All fields required' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const adminUser = new User({
-      name,
-      username,
-      email,
-      password: hashedPassword,
-      role: 'admin',
-      zegoUserId: `zego_admin_${new mongoose.Types.ObjectId()}`
-    });
-
-    await adminUser.save();
-
-    const token = jwt.sign(
-      { userId: adminUser._id, username: adminUser.username, role: 'admin' },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      message: 'Admin created successfully',
-      token,
-      user: { id: adminUser._id, username, role: 'admin' }
-    });
   } catch (error) {
-    console.error('Setup error:', error);
-    res.status(500).json({ error: 'Setup failed' });
+    console.error('❌ Error ensuring admin exists:', error.message);
   }
-});
+}
 
 
 
@@ -2599,7 +2593,84 @@ const PORT = process.env.PORT || 3000;
 
 
 
-app.listen(PORT, () => {
+// app.listen(PORT, () => {
+//   console.log('╔════════════════════════════════════════════════════════════╗');
+//   console.log('║       🚀 Hi Chat Backend Server - PRODUCTION READY        ║');
+//   console.log('╠════════════════════════════════════════════════════════════╣');
+//   console.log(`║  📡 Port:              ${PORT}`);
+//   console.log(`║  🗄️  Database:         ${MONGODB_URI.includes('localhost') ? 'Local MongoDB' : 'Remote MongoDB'}`);
+//   console.log(`║  ☁️  Cloudinary:        ${cloudinary.config().cloud_name} (✅ Active)`);
+//   console.log(`║  🎯 ZEGOCLOUD:         App ID ${ZEGOCLOUD_CONFIG.APP_ID} (✅ Configured)`);
+//   console.log(`║  🌍 Environment:       ${process.env.NODE_ENV || 'development'}`);
+//   console.log('║  📁 File Uploads:      ✅ Cloudinary + Local Backup');
+//   console.log('║  💾 Backup System:     ✅ Enabled');
+//   console.log('╚════════════════════════════════════════════════════════════╝');
+  
+//   console.log('\n✅ Server is ready to accept connections!');
+//   console.log(`📝 API Documentation available at: http://localhost:${PORT}/api/health`);
+// });
+
+// // Graceful shutdown
+// process.on('SIGTERM', () => {
+//   console.log('🛑 SIGTERM received, shutting down gracefully');
+//   mongoose.connection.close(() => {
+//     console.log('✅ Database connection closed');
+//     process.exit(0);
+//   });
+// });
+
+// process.on('SIGINT', () => {
+//   console.log('\n🛑 SIGINT received, shutting down gracefully');
+//   mongoose.connection.close(() => {
+//     console.log('✅ Database connection closed');
+//     process.exit(0);
+//   });
+// });
+
+// // Error handlers
+// process.on('unhandledRejection', (reason, promise) => {
+//   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+//   // Application specific logging, throwing an error, or other logic here
+// });
+
+// process.on('uncaughtException', (err) => {
+//   console.error('❌ Uncaught Exception:', err);
+//   // Should close database/connections gracefully
+//   process.exit(1); // Mandatory exit for uncaught exceptions
+// });
+
+
+// module.exports = app;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Change of Configs or Listeners
+
+
+
+
+// ========================================
+// MODIFIED SERVER STARTUP
+// ========================================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, async () => {
   console.log('╔════════════════════════════════════════════════════════════╗');
   console.log('║       🚀 Hi Chat Backend Server - PRODUCTION READY        ║');
   console.log('╠════════════════════════════════════════════════════════════╣');
@@ -2613,7 +2684,10 @@ app.listen(PORT, () => {
   console.log('╚════════════════════════════════════════════════════════════╝');
   
   console.log('\n✅ Server is ready to accept connections!');
-  console.log(`📝 API Documentation available at: http://localhost:${PORT}/api/health`);
+  console.log(`📝 API Documentation available at: http://localhost:${PORT}/api/health\n`);
+  
+  // Ensure admin exists
+  await ensureAdminExists();
 });
 
 // Graceful shutdown
@@ -2636,14 +2710,11 @@ process.on('SIGINT', () => {
 // Error handlers
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Application specific logging, throwing an error, or other logic here
 });
 
 process.on('uncaughtException', (err) => {
   console.error('❌ Uncaught Exception:', err);
-  // Should close database/connections gracefully
-  process.exit(1); // Mandatory exit for uncaught exceptions
+  process.exit(1);
 });
-
 
 module.exports = app;
