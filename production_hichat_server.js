@@ -1537,6 +1537,84 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
   }
 });
 
+
+
+
+
+
+
+
+// ========================================
+// 📸 GROUP PROFILE PICTURE UPLOAD
+// ========================================
+
+app.post('/api/groups/:groupId/profile', 
+  authenticateToken, 
+  cloudinaryUpload.single('image'), 
+  uploadErrorHandler,
+  async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      
+      console.log('📸 Uploading group profile picture for:', groupId);
+      
+      if (!req.file) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'No file uploaded' 
+        });
+      }
+      
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Invalid group ID' 
+        });
+      }
+      
+      const group = await Group.findById(groupId);
+      
+      if (!group) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Group not found' 
+        });
+      }
+      
+      const isAdmin = group.admins.some(a => a.toString() === req.user.userId);
+      if (!isAdmin) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Only admins can update group profile' 
+        });
+      }
+      
+      group.profilePic = req.file.path;
+      group.updatedAt = new Date();
+      await group.save();
+      
+      console.log(`✅ Group profile updated: ${group.name} -> ${req.file.path}`);
+      
+      res.json({
+        success: true,
+        message: 'Group profile updated',
+        url: req.file.path,
+        group: {
+          id: group._id,
+          name: group.name,
+          profilePic: group.profilePic
+        }
+      });
+    } catch (err) {
+      console.error('❌ Group profile upload error:', err);
+      res.status(500).json({ 
+        success: false,
+        error: err.message 
+      });
+    }
+  }
+);
+
 // ========================================
 // END OF GROUP ROUTES
 // ========================================
