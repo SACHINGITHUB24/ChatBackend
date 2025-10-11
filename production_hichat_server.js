@@ -1536,70 +1536,466 @@ app.put('/api/admin/users/:userId/role', authenticateToken, async (req, res) => 
 
 
 
-app.post("/api/backup/:userId", async (req, res) => {
+// app.post("/api/backup/:userId", async (req, res) => {
+//   try {
+//     const userId = req.params.userId;
+
+//     // 1️⃣ Fetch all user data (adjust collections as per your schema)
+//     const user = await User.findById(userId).lean();
+//     const chats = await Chat.find({ participants: userId }).lean();
+//     const messages = await Message.find({ sender: userId }).lean();
+
+//     const backupData = { user, chats, messages, createdAt: new Date() };
+
+//     // 2️⃣ Create a temporary JSON file in memory
+//     const backupJSON = JSON.stringify(backupData, null, 2);
+//     const stream = Readable.from([backupJSON]);
+
+//     // 3️⃣ Upload JSON to Cloudinary
+//     const uploadResponse = await cloudinary.uploader.upload_stream(
+//       { resource_type: "raw", folder: "hichat_backups", public_id: `backup_${userId}_${Date.now()}.json` },
+//       async (error, result) => {
+//         if (error) return res.status(500).json({ message: "Backup upload failed", error });
+
+//         // 4️⃣ Save backup URL in user’s record
+//         user.lastBackup = {
+//           url: result.secure_url,
+//           date: new Date(),
+//         };
+//         await User.findByIdAndUpdate(userId, { $set: { lastBackup: user.lastBackup } });
+
+//         res.json({ message: "Backup created successfully!", backupUrl: result.secure_url });
+//       }
+//     );
+
+//     stream.pipe(uploadResponse);
+//   } catch (err) {
+//     res.status(500).json({ message: "Backup failed", error: err.message });
+//   }
+// });
+
+
+// app.get("/api/restore/:userId", async (req, res) => {
+//   try {
+//     const userId = req.params.userId;
+
+//     const user = await User.findById(userId);
+//     if (!user?.lastBackup?.url) {
+//       return res.status(404).json({ message: "No backup found for this user" });
+//     }
+
+//     // 1️⃣ Download JSON from Cloudinary
+//     const response = await axios.get(user.lastBackup.url);
+//     const backupData = response.data;
+
+//     // 2️⃣ Restore user, chats, messages
+//     await Chat.deleteMany({ participants: userId });
+//     await Message.deleteMany({ sender: userId });
+
+//     await Chat.insertMany(backupData.chats);
+//     await Message.insertMany(backupData.messages);
+
+//     res.json({ message: "Backup restored successfully!" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Restore failed", error: err.message });
+//   }
+// });
+
+
+
+
+
+//Again Updated Fixed Backup Feature 
+
+
+
+
+
+// ========================================
+// 💾 BACKUP & RESTORE SYSTEM - FIXED VERSION
+// ========================================
+
+// 1️⃣ CREATE BACKUP - Download all user data to Cloudinary
+app.post("/api/backup/:userId", authenticateToken, async (req, res) => {
   try {
-    const userId = req.params.userId;
+    const { userId } = req.params;
 
-    // 1️⃣ Fetch all user data (adjust collections as per your schema)
-    const user = await User.findById(userId).lean();
-    const chats = await Chat.find({ participants: userId }).lean();
-    const messages = await Message.find({ sender: userId }).lean();
+    // Security: Users can only backup their own data (or admin can backup anyone)
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: "You can only backup your own data" 
+      });
+    }
 
-    const backupData = { user, chats, messages, createdAt: new Date() };
+    console.log(`📦 Starting backup for user: ${userId}`);
 
-    // 2️⃣ Create a temporary JSON file in memory
-    const backupJSON = JSON.stringify(backupData, null, 2);
-    const stream = Readable.from([backupJSON]);
+    // Fetch all user-related data
+    const user = await User.findById(userId).select('-password').lean();
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
 
-    // 3️⃣ Upload JSON to Cloudinary
-    const uploadResponse = await cloudinary.uploader.upload_stream(
-      { resource_type: "raw", folder: "hichat_backups", public_id: `backup_${userId}_${Date.now()}.json` },
-      async (error, result) => {
-        if (error) return res.status(500).json({ message: "Backup upload failed", error });
+    // Get all groups user is member of
+    const groups = await Group.find({ members: userId }).lean();
+    const groupIds = groups.map(g => g._id);
 
-        // 4️⃣ Save backup URL in user’s record
-        user.lastBackup = {
-          url: result.secure_url,
-          date: new Date(),
-        };
-        await User.findByIdAndUpdate(userId, { $set: { lastBackup: user.lastBackup } });
+    // Get ALL messages (sent, received, and group messages)
+    const messages = await Message.find({
+      $or: [
+        { sender: userId },           // Messages sent by user
+        { recipient: userId },        // Messages received by user
+        { group: { $in: groupIds } }  // Group messages
+      ]
+    }).lean();
 
-        res.json({ message: "Backup created successfully!", backupUrl: result.secure_url });
+    // Prepare backup data
+    const backupData = {
+      version: "1.0",
+      backupDate: new Date(),
+      user: {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        profilePic: user.profilePic,
+        role: user.role,
+        zegoUserId: user.zegoUserId,
+        createdAt: user.createdAt
+      },
+      groups: groups,
+      messages: messages,
+      statistics: {
+        totalGroups: groups.length,
+        totalMessages: messages.length,
+        sentMessages: messages.filter(m => m.sender.toString() === userId).length,
+        receivedMessages: messages.filter(m => m.recipient?.toString() === userId).length,
+        groupMessages: messages.filter(m => m.group).length
       }
-    );
+    };
 
-    stream.pipe(uploadResponse);
+    // Convert to JSON
+    const backupJSON = JSON.stringify(backupData, null, 2);
+    const backupBuffer = Buffer.from(backupJSON);
+
+    console.log(`📊 Backup stats: ${messages.length} messages, ${groups.length} groups`);
+
+    // Upload to Cloudinary using upload method (not upload_stream)
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: "raw",
+          folder: "hichat_backups",
+          public_id: `backup_${userId}_${Date.now()}`,
+          format: "json"
+        },
+        (error, result) => {
+          if (error) {
+            console.error('❌ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+
+      // Write buffer to stream
+      const readable = Readable.from([backupBuffer]);
+      readable.pipe(uploadStream);
+    });
+
+    // Save backup URL in user's record
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        lastBackup: {
+          url: uploadResult.secure_url,
+          date: new Date(),
+          publicId: uploadResult.public_id,
+          size: backupBuffer.length,
+          messageCount: messages.length,
+          groupCount: groups.length
+        }
+      }
+    });
+
+    console.log(`✅ Backup completed: ${uploadResult.secure_url}`);
+
+    res.json({
+      success: true,
+      message: "Backup created successfully!",
+      backup: {
+        url: uploadResult.secure_url,
+        date: new Date(),
+        size: `${(backupBuffer.length / 1024).toFixed(2)} KB`,
+        statistics: backupData.statistics
+      }
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "Backup failed", error: err.message });
+    console.error("❌ Backup failed:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Backup failed", 
+      error: err.message 
+    });
   }
 });
 
 
-app.get("/api/restore/:userId", async (req, res) => {
+// 2️⃣ RESTORE BACKUP - Restore user data from Cloudinary backup
+app.post("/api/restore/:userId", authenticateToken, async (req, res) => {
   try {
-    const userId = req.params.userId;
+    const { userId } = req.params;
 
-    const user = await User.findById(userId);
-    if (!user?.lastBackup?.url) {
-      return res.status(404).json({ message: "No backup found for this user" });
+    // Security: Users can only restore their own data (or admin can restore anyone)
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: "You can only restore your own data" 
+      });
     }
 
-    // 1️⃣ Download JSON from Cloudinary
+    console.log(`🔄 Starting restore for user: ${userId}`);
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
+
+    if (!user.lastBackup?.url) {
+      return res.status(404).json({ 
+        success: false,
+        message: "No backup found for this user. Please create a backup first." 
+      });
+    }
+
+    // Download backup JSON from Cloudinary
+    console.log(`📥 Downloading backup from: ${user.lastBackup.url}`);
     const response = await axios.get(user.lastBackup.url);
     const backupData = response.data;
 
-    // 2️⃣ Restore user, chats, messages
-    await Chat.deleteMany({ participants: userId });
-    await Message.deleteMany({ sender: userId });
+    // Validate backup data
+    if (!backupData.version || !backupData.user || !backupData.messages) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid backup file format" 
+      });
+    }
 
-    await Chat.insertMany(backupData.chats);
-    await Message.insertMany(backupData.messages);
+    console.log(`📊 Restoring: ${backupData.statistics?.totalMessages || 0} messages, ${backupData.statistics?.totalGroups || 0} groups`);
 
-    res.json({ message: "Backup restored successfully!" });
+    // Start restore process (wrapped in try-catch for safety)
+    try {
+      // 1. Delete existing messages (only user's sent/received messages, not all)
+      await Message.deleteMany({
+        $or: [
+          { sender: userId },
+          { recipient: userId }
+        ]
+      });
+      console.log('✅ Cleared old messages');
+
+      // 2. Delete existing groups where user is creator (optional - be careful!)
+      // await Group.deleteMany({ createdBy: userId });
+
+      // 3. Restore groups (skip duplicates)
+      if (backupData.groups && backupData.groups.length > 0) {
+        for (const group of backupData.groups) {
+          const exists = await Group.findById(group._id);
+          if (!exists) {
+            await Group.create(group);
+          }
+        }
+        console.log(`✅ Restored ${backupData.groups.length} groups`);
+      }
+
+      // 4. Restore messages (skip duplicates)
+      if (backupData.messages && backupData.messages.length > 0) {
+        const messagesToInsert = [];
+        for (const msg of backupData.messages) {
+          const exists = await Message.findById(msg._id);
+          if (!exists) {
+            messagesToInsert.push(msg);
+          }
+        }
+        
+        if (messagesToInsert.length > 0) {
+          await Message.insertMany(messagesToInsert, { ordered: false });
+        }
+        console.log(`✅ Restored ${messagesToInsert.length} messages`);
+      }
+
+      // 5. Update user profile (optional - restore profile pic, etc.)
+      if (backupData.user.profilePic) {
+        await User.findByIdAndUpdate(userId, {
+          profilePic: backupData.user.profilePic
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Backup restored successfully!",
+        restored: {
+          messages: backupData.messages?.length || 0,
+          groups: backupData.groups?.length || 0,
+          backupDate: backupData.backupDate
+        }
+      });
+
+    } catch (restoreError) {
+      console.error('❌ Restore operation failed:', restoreError);
+      throw new Error(`Restore failed: ${restoreError.message}`);
+    }
+
   } catch (err) {
-    res.status(500).json({ message: "Restore failed", error: err.message });
+    console.error("❌ Restore failed:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Restore failed", 
+      error: err.message 
+    });
   }
 });
+
+
+// 3️⃣ GET BACKUP INFO - Check if backup exists
+app.get("/api/backup/:userId/info", authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Security check
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied" 
+      });
+    }
+
+    const user = await User.findById(userId).select('lastBackup');
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
+
+    if (!user.lastBackup?.url) {
+      return res.json({
+        success: true,
+        hasBackup: false,
+        message: "No backup available"
+      });
+    }
+
+    res.json({
+      success: true,
+      hasBackup: true,
+      backup: {
+        url: user.lastBackup.url,
+        date: user.lastBackup.date,
+        size: user.lastBackup.size ? `${(user.lastBackup.size / 1024).toFixed(2)} KB` : 'Unknown',
+        messageCount: user.lastBackup.messageCount || 0,
+        groupCount: user.lastBackup.groupCount || 0
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Get backup info failed:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to get backup info", 
+      error: err.message 
+    });
+  }
+});
+
+
+// 4️⃣ DELETE BACKUP - Remove backup from Cloudinary
+app.delete("/api/backup/:userId", authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Security check
+    if (req.user.userId !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied" 
+      });
+    }
+
+    const user = await User.findById(userId);
+    
+    if (!user || !user.lastBackup?.publicId) {
+      return res.status(404).json({ 
+        success: false,
+        message: "No backup found" 
+      });
+    }
+
+    // Delete from Cloudinary
+    await cloudinary.uploader.destroy(user.lastBackup.publicId, { resource_type: 'raw' });
+
+    // Clear backup info from user record
+    await User.findByIdAndUpdate(userId, {
+      $unset: { lastBackup: "" }
+    });
+
+    console.log(`✅ Backup deleted for user: ${userId}`);
+
+    res.json({
+      success: true,
+      message: "Backup deleted successfully"
+    });
+
+  } catch (err) {
+    console.error("❌ Delete backup failed:", err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to delete backup", 
+      error: err.message 
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
