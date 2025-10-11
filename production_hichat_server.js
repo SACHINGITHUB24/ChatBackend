@@ -1050,13 +1050,16 @@ app.put('/api/user/online-status', authenticateToken, async (req, res) => {
 
 
 // ========================================
-// 👥 FIXED GROUP ROUTES
+// 👥 COMPLETE GROUP ROUTES - COPY & PASTE THIS ENTIRE SECTION
 // ========================================
+// DELETE ALL OTHER GROUP ROUTES AND REPLACE WITH THIS
 
 // CREATE GROUP - Enhanced with validation
 app.post('/api/groups', authenticateToken, async (req, res) => {
   try {
     const { name, description, members = [], profilePic } = req.body;
+    
+    console.log('📝 Creating group:', { name, members, userId: req.user.userId });
     
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Group name is required' });
@@ -1064,9 +1067,12 @@ app.post('/api/groups', authenticateToken, async (req, res) => {
     
     // Validate that all member IDs exist
     const memberIds = [...new Set([...members, req.user.userId])];
+    console.log('👥 Validating members:', memberIds);
+    
     const validMembers = await User.find({ _id: { $in: memberIds } });
     
     if (validMembers.length !== memberIds.length) {
+      console.error('❌ Invalid members detected');
       return res.status(400).json({ error: 'One or more member IDs are invalid' });
     }
     
@@ -1083,49 +1089,49 @@ app.post('/api/groups', authenticateToken, async (req, res) => {
     });
     
     const savedGroup = await group.save();
+    console.log('💾 Group saved to DB:', savedGroup._id);
+    
     await savedGroup.populate('members', 'name username profilePic isOnline');
     await savedGroup.populate('admins', 'name username');
     await savedGroup.populate('createdBy', 'name username');
     
-    console.log(`✅ Group created: ${name} (ID: ${savedGroup._id})`);
+    console.log(`✅ Group created successfully: ${name} (ID: ${savedGroup._id})`);
     
     res.status(201).json({
-      success: true,
       message: 'Group created successfully',
       group: savedGroup
     });
   } catch (error) {
     console.error('❌ Create group error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to create group',
       details: error.message 
     });
   }
 });
 
-// GET ALL GROUPS - User's groups
+// GET ALL GROUPS - User's groups (RETURNS ARRAY DIRECTLY)
 app.get('/api/groups', authenticateToken, async (req, res) => {
   try {
+    console.log('📋 Fetching groups for user:', req.user.userId);
+    
     const groups = await Group.find({
       members: req.user.userId
     })
     .populate('members', 'name username profilePic isOnline lastSeen')
     .populate('admins', 'name username')
     .populate('createdBy', 'name username')
-    .sort({ updatedAt: -1 });
+    .sort({ updatedAt: -1 })
+    .lean();
     
     console.log(`✅ Fetched ${groups.length} groups for user: ${req.user.userId}`);
+    console.log('Groups:', groups.map(g => ({ id: g._id, name: g.name })));
     
-    res.json({
-      success: true,
-      count: groups.length,
-      groups: groups
-    });
+    // Return array directly (not wrapped in object)
+    res.json(groups);
   } catch (error) {
     console.error('❌ Get groups error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to fetch groups',
       details: error.message 
     });
@@ -1137,10 +1143,12 @@ app.get('/api/groups/:groupId', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     
+    console.log('🔍 Fetching group:', groupId);
+    
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      console.error('❌ Invalid group ID format:', groupId);
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid group ID format' 
       });
     }
@@ -1151,28 +1159,27 @@ app.get('/api/groups/:groupId', authenticateToken, async (req, res) => {
       .populate('createdBy', 'name username');
     
     if (!group) {
+      console.error('❌ Group not found:', groupId);
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
     
     // Check if user is a member
-    if (!group.members.some(m => m._id.toString() === req.user.userId)) {
+    const isMember = group.members.some(m => m._id.toString() === req.user.userId);
+    if (!isMember) {
+      console.error('❌ User not a member:', req.user.userId);
       return res.status(403).json({ 
-        success: false,
         error: 'You are not a member of this group' 
       });
     }
     
-    res.json({
-      success: true,
-      group: group
-    });
+    console.log('✅ Group fetched successfully:', group.name);
+    
+    res.json(group);
   } catch (error) {
     console.error('❌ Get group error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to fetch group',
       details: error.message 
     });
@@ -1186,10 +1193,12 @@ app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => 
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
 
+    console.log(`📨 Fetching messages for group: ${groupId}`);
+
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      console.error('❌ Invalid group ID format:', groupId);
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid group ID format' 
       });
     }
@@ -1197,16 +1206,17 @@ app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => 
     // Check if group exists
     const group = await Group.findById(groupId);
     if (!group) {
+      console.error('❌ Group not found:', groupId);
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
     
     // Check if user is a member of the group
-    if (!group.members.includes(req.user.userId)) {
+    const isMember = group.members.some(m => m.toString() === req.user.userId);
+    if (!isMember) {
+      console.error('❌ User not a member:', req.user.userId);
       return res.status(403).json({ 
-        success: false,
         error: 'You are not a member of this group' 
       });
     }
@@ -1216,20 +1226,16 @@ app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => 
       .limit(limit)
       .skip(offset)
       .populate('sender', 'name username profilePic zegoUserId')
-      .exec();
+      .lean();
       
     console.log(`✅ Fetched ${messages.length} messages for group: ${groupId}`);
 
-    res.json({
-      success: true,
-      count: messages.length,
-      messages: messages.reverse() // Oldest first for display
-    });
+    // Return array directly (oldest first for display)
+    res.json(messages.reverse());
 
   } catch (err) {
     console.error('❌ Error fetching group messages:', err);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to fetch group messages',
       details: err.message 
     });
@@ -1242,10 +1248,11 @@ app.put('/api/groups/:groupId', authenticateToken, async (req, res) => {
     const { groupId } = req.params;
     const { name, description, profilePic } = req.body;
     
+    console.log('✏️ Updating group:', groupId);
+    
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid group ID format' 
       });
     }
@@ -1254,15 +1261,14 @@ app.put('/api/groups/:groupId', authenticateToken, async (req, res) => {
     
     if (!group) {
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
     
     // Check if user is admin
-    if (!group.admins.includes(req.user.userId)) {
+    const isAdmin = group.admins.some(a => a.toString() === req.user.userId);
+    if (!isAdmin) {
       return res.status(403).json({ 
-        success: false,
         error: 'Only group admins can update group details' 
       });
     }
@@ -1285,14 +1291,12 @@ app.put('/api/groups/:groupId', authenticateToken, async (req, res) => {
     console.log(`✅ Group updated: ${updatedGroup.name}`);
     
     res.json({
-      success: true,
       message: 'Group updated successfully',
       group: updatedGroup
     });
   } catch (error) {
     console.error('❌ Update group error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to update group',
       details: error.message 
     });
@@ -1305,9 +1309,10 @@ app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => 
     const { groupId } = req.params;
     const { userId } = req.body;
     
+    console.log('➕ Adding member to group:', { groupId, userId });
+    
     if (!userId) {
       return res.status(400).json({ 
-        success: false,
         error: 'User ID is required' 
       });
     }
@@ -1315,7 +1320,6 @@ app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => 
     // Validate ObjectId formats
     if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid ID format' 
       });
     }
@@ -1324,15 +1328,14 @@ app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => 
     
     if (!group) {
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
     
     // Check if requester is admin
-    if (!group.admins.includes(req.user.userId)) {
+    const isAdmin = group.admins.some(a => a.toString() === req.user.userId);
+    if (!isAdmin) {
       return res.status(403).json({ 
-        success: false,
         error: 'Only group admins can add members' 
       });
     }
@@ -1341,15 +1344,14 @@ app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => 
     const userToAdd = await User.findById(userId);
     if (!userToAdd) {
       return res.status(404).json({ 
-        success: false,
         error: 'User not found' 
       });
     }
     
     // Check if already a member
-    if (group.members.includes(userId)) {
+    const isMember = group.members.some(m => m.toString() === userId);
+    if (isMember) {
       return res.status(400).json({ 
-        success: false,
         error: 'User is already a member' 
       });
     }
@@ -1362,14 +1364,12 @@ app.post('/api/groups/:groupId/members', authenticateToken, async (req, res) => 
     console.log(`✅ Member added to group: ${userToAdd.username} -> ${group.name}`);
     
     res.json({
-      success: true,
       message: 'Member added successfully',
       group: group
     });
   } catch (error) {
     console.error('❌ Add member error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to add member',
       details: error.message 
     });
@@ -1381,10 +1381,11 @@ app.delete('/api/groups/:groupId/members/:userId', authenticateToken, async (req
   try {
     const { groupId, userId } = req.params;
     
+    console.log('➖ Removing member from group:', { groupId, userId });
+    
     // Validate ObjectId formats
     if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid ID format' 
       });
     }
@@ -1393,15 +1394,14 @@ app.delete('/api/groups/:groupId/members/:userId', authenticateToken, async (req
     
     if (!group) {
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
     
     // Check if requester is admin
-    if (!group.admins.includes(req.user.userId)) {
+    const isAdmin = group.admins.some(a => a.toString() === req.user.userId);
+    if (!isAdmin) {
       return res.status(403).json({ 
-        success: false,
         error: 'Only group admins can remove members' 
       });
     }
@@ -1409,7 +1409,6 @@ app.delete('/api/groups/:groupId/members/:userId', authenticateToken, async (req
     // Can't remove the creator
     if (group.createdBy.toString() === userId) {
       return res.status(400).json({ 
-        success: false,
         error: 'Cannot remove group creator' 
       });
     }
@@ -1425,15 +1424,56 @@ app.delete('/api/groups/:groupId/members/:userId', authenticateToken, async (req
     console.log(`✅ Member removed from group: ${userId} from ${group.name}`);
     
     res.json({
-      success: true,
       message: 'Member removed successfully',
       group: group
     });
   } catch (error) {
     console.error('❌ Remove member error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to remove member',
+      details: error.message 
+    });
+  }
+});
+
+// LEAVE GROUP (for non-admin members)
+app.post('/api/groups/:groupId/leave', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    
+    console.log('👋 User leaving group:', { groupId, userId: req.user.userId });
+    
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({ error: 'Invalid group ID format' });
+    }
+    
+    const group = await Group.findById(groupId);
+    
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    // Can't leave if you're the creator
+    if (group.createdBy.toString() === req.user.userId) {
+      return res.status(400).json({ 
+        error: 'Group creator cannot leave. Transfer ownership or delete the group.' 
+      });
+    }
+    
+    // Remove from members and admins
+    group.members = group.members.filter(m => m.toString() !== req.user.userId);
+    group.admins = group.admins.filter(a => a.toString() !== req.user.userId);
+    group.updatedAt = new Date();
+    
+    await group.save();
+    
+    console.log(`✅ User left group: ${req.user.userId} from ${group.name}`);
+    
+    res.json({ message: 'Left group successfully' });
+  } catch (error) {
+    console.error('❌ Leave group error:', error);
+    res.status(500).json({ 
+      error: 'Failed to leave group',
       details: error.message 
     });
   }
@@ -1444,10 +1484,11 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
   try {
     const { groupId } = req.params;
     
+    console.log('🗑️ Deleting group:', groupId);
+    
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ 
-        success: false,
         error: 'Invalid group ID format' 
       });
     }
@@ -1456,7 +1497,6 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
     
     if (!group) {
       return res.status(404).json({ 
-        success: false,
         error: 'Group not found' 
       });
     }
@@ -1464,13 +1504,13 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
     // Only creator can delete group
     if (group.createdBy.toString() !== req.user.userId) {
       return res.status(403).json({ 
-        success: false,
         error: 'Only the group creator can delete the group' 
       });
     }
     
     // Delete all group messages
-    await Message.deleteMany({ group: groupId });
+    const deletedMessages = await Message.deleteMany({ group: groupId });
+    console.log(`🗑️ Deleted ${deletedMessages.deletedCount} messages`);
     
     // Delete the group
     await Group.findByIdAndDelete(groupId);
@@ -1478,18 +1518,20 @@ app.delete('/api/groups/:groupId', authenticateToken, async (req, res) => {
     console.log(`✅ Group deleted: ${group.name}`);
     
     res.json({
-      success: true,
       message: 'Group deleted successfully'
     });
   } catch (error) {
     console.error('❌ Delete group error:', error);
     res.status(500).json({ 
-      success: false,
       error: 'Failed to delete group',
       details: error.message 
     });
   }
 });
+
+// ========================================
+// END OF GROUP ROUTES
+// ========================================
 
 
 
