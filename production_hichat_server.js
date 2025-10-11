@@ -1704,23 +1704,125 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
   }
 });
 
+// app.get('/api/chats', authenticateToken, async (req, res) => {
+//   try {
+//     const userGroups = await Group.find({ members: req.user.userId }).distinct('_id');
+    
+//     const recentMessages = await Message.aggregate([
+//       {
+//         $match: {
+//           $or: [
+//             { sender: new mongoose.Types.ObjectId(req.user.userId) },
+//             { recipient: new mongoose.Types.ObjectId(req.user.userId) },
+//             { group: { $in: userGroups } }
+//           ]
+//         }
+//       },
+//       {
+//         $sort: { timestamp: -1 }
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             $cond: [
+//               { $ne: ["$group", null] },
+//               "$group",
+//               {
+//                 $cond: [
+//                   { $eq: ["$sender", new mongoose.Types.ObjectId(req.user.userId)] },
+//                   "$recipient",
+//                   "$sender"
+//                 ]
+//               }
+//             ]
+//           },
+//           lastMessage: { $first: "$ROOT" }
+//         }
+//       },
+//       {
+//         $sort: { "lastMessage.timestamp": -1 }
+//       }
+//     ]);
+    
+//     const chats = [];
+//     for (const item of recentMessages) {
+//       const lastMessage = item.lastMessage;
+//       let chatInfo = {};
+      
+//       if (lastMessage.group) {
+//         const group = await Group.findById(lastMessage.group)
+//           .populate('members', 'name username profilePic isOnline');
+//         if (group) {
+//           chatInfo = {
+//             id: group._id,
+//             name: group.name,
+//             type: 'group',
+//             profilePic: group.profilePic,
+//             lastMessage: lastMessage.content,
+//             lastMessageType: lastMessage.messageType,
+//             timestamp: lastMessage.timestamp,
+//             members: group.members,
+//             unreadCount: 0
+//           };
+//         }
+//       } else {
+//         const otherUserId = lastMessage.sender.toString() === req.user.userId 
+//           ? lastMessage.recipient 
+//           : lastMessage.sender;
+//         const otherUser = await User.findById(otherUserId, 'name username profilePic isOnline lastSeen');
+//         if (otherUser) {
+//           chatInfo = {
+//             id: otherUser._id,
+//             name: otherUser.name,
+//             username: otherUser.username,
+//             type: 'direct',
+//             profilePic: otherUser.profilePic,
+//             isOnline: otherUser.isOnline,
+//             lastSeen: otherUser.lastSeen,
+//             lastMessage: lastMessage.content,
+//             lastMessageType: lastMessage.messageType,
+//             timestamp: lastMessage.timestamp,
+//             unreadCount: 0
+//           };
+//         }
+//       }
+      
+//       if (Object.keys(chatInfo).length > 0) {
+//         chats.push(chatInfo);
+//       }
+//     }
+    
+//     res.json(chats);
+//   } catch (error) {
+//     console.error('❌ Get chats error:', error);
+//     res.status(500).json({ error: 'Failed to fetch chats' });
+//   }
+// });
+
+
+
+
+
 app.get('/api/chats', authenticateToken, async (req, res) => {
   try {
-    const userGroups = await Group.find({ members: req.user.userId }).distinct('_id');
-    
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+
+    // Step 1: Get user's groups
+    const userGroups = (await Group.find({ members: userId }).distinct('_id'))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    // Step 2: Aggregate recent messages
     const recentMessages = await Message.aggregate([
       {
         $match: {
           $or: [
-            { sender: new mongoose.Types.ObjectId(req.user.userId) },
-            { recipient: new mongoose.Types.ObjectId(req.user.userId) },
+            { sender: userId },
+            { recipient: userId },
             { group: { $in: userGroups } }
           ]
         }
       },
-      {
-        $sort: { timestamp: -1 }
-      },
+      { $sort: { timestamp: -1 } },
       {
         $group: {
           _id: {
@@ -1729,29 +1831,31 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
               "$group",
               {
                 $cond: [
-                  { $eq: ["$sender", new mongoose.Types.ObjectId(req.user.userId)] },
-                  "$recipient",
-                  "$sender"
+                  { $eq: ["$sender", userId] },
+                  { $ifNull: ["$recipient", null] },
+                  { $ifNull: ["$sender", null] }
                 ]
               }
             ]
           },
-          lastMessage: { $first: "$ROOT" }
+          lastMessage: { $first: "$$ROOT" }
         }
       },
-      {
-        $sort: { "lastMessage.timestamp": -1 }
-      }
+      { $sort: { "lastMessage.timestamp": -1 } }
     ]);
-    
+
     const chats = [];
+
     for (const item of recentMessages) {
       const lastMessage = item.lastMessage;
       let chatInfo = {};
-      
+
       if (lastMessage.group) {
+        // Group chat
         const group = await Group.findById(lastMessage.group)
-          .populate('members', 'name username profilePic isOnline');
+          .populate('members', 'name username profilePic isOnline')
+          .lean();
+
         if (group) {
           chatInfo = {
             id: group._id,
@@ -1766,10 +1870,14 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
           };
         }
       } else {
-        const otherUserId = lastMessage.sender.toString() === req.user.userId 
-          ? lastMessage.recipient 
-          : lastMessage.sender;
-        const otherUser = await User.findById(otherUserId, 'name username profilePic isOnline lastSeen');
+        // Direct chat
+        const otherUserId =
+          lastMessage.sender.toString() === req.user.userId
+            ? lastMessage.recipient
+            : lastMessage.sender;
+
+        const otherUser = await User.findById(otherUserId, 'name username profilePic isOnline lastSeen').lean();
+
         if (otherUser) {
           chatInfo = {
             id: otherUser._id,
@@ -1786,18 +1894,33 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
           };
         }
       }
-      
-      if (Object.keys(chatInfo).length > 0) {
-        chats.push(chatInfo);
-      }
+
+      if (Object.keys(chatInfo).length > 0) chats.push(chatInfo);
     }
-    
+
     res.json(chats);
   } catch (error) {
     console.error('❌ Get chats error:', error);
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ========================================
 // 📞 CALLING ENDPOINTS
