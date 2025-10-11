@@ -2030,6 +2030,130 @@ app.post("/api/backup/:userId", authenticateToken, async (req, res) => {
 
 
 // 2️⃣ RESTORE BACKUP - Restore user data from Cloudinary backup
+// app.post("/api/restore/:userId", authenticateToken, async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+
+//     // Security: Users can only restore their own data (or admin can restore anyone)
+//     if (req.user.userId !== userId && req.user.role !== 'admin') {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "You can only restore your own data" 
+//       });
+//     }
+
+//     console.log(`🔄 Starting restore for user: ${userId}`);
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ 
+//         success: false,
+//         message: "User not found" 
+//       });
+//     }
+
+//     if (!user.lastBackup?.url) {
+//       return res.status(404).json({ 
+//         success: false,
+//         message: "No backup found for this user. Please create a backup first." 
+//       });
+//     }
+
+//     // Download backup JSON from Cloudinary
+//     console.log(`📥 Downloading backup from: ${user.lastBackup.url}`);
+//     const response = await axios.get(user.lastBackup.url);
+//     const backupData = response.data;
+
+//     // Validate backup data
+//     if (!backupData.version || !backupData.user || !backupData.messages) {
+//       return res.status(400).json({ 
+//         success: false,
+//         message: "Invalid backup file format" 
+//       });
+//     }
+
+//     console.log(`📊 Restoring: ${backupData.statistics?.totalMessages || 0} messages, ${backupData.statistics?.totalGroups || 0} groups`);
+
+//     // Start restore process (wrapped in try-catch for safety)
+//     try {
+//       // 1. Delete existing messages (only user's sent/received messages, not all)
+//       const deleteResult = await Message.deleteMany({
+//         $or: [
+//           { sender: userId },
+//           { recipient: userId }
+//         ]
+//       });
+//       console.log(`✅ Cleared ${deleteResult.deletedCount} old messages`);
+
+//       // 2. Delete existing groups where user is a member (optional - careful!)
+//       const groupDeleteResult = await Group.deleteMany({ 
+//         members: userId,
+//         createdBy: userId // Only delete groups created by this user
+//       });
+//       console.log(`✅ Cleared ${groupDeleteResult.deletedCount} old groups`);
+
+//       // 3. Restore groups (recreate with new IDs to avoid duplicates)
+//       if (backupData.groups && backupData.groups.length > 0) {
+//         const groupsToInsert = backupData.groups.map(group => {
+//           // Remove _id to let MongoDB generate new ones
+//           const { _id, ...groupData } = group;
+//           return groupData;
+//         });
+        
+//         await Group.insertMany(groupsToInsert);
+//         console.log(`✅ Restored ${groupsToInsert.length} groups`);
+//       }
+
+//       // 4. Restore messages (recreate with new IDs to avoid duplicates)
+//       if (backupData.messages && backupData.messages.length > 0) {
+//         const messagesToInsert = backupData.messages.map(msg => {
+//           // Remove _id to let MongoDB generate new ones
+//           const { _id, ...messageData } = msg;
+//           return messageData;
+//         });
+        
+//         if (messagesToInsert.length > 0) {
+//           await Message.insertMany(messagesToInsert);
+//         }
+//         console.log(`✅ Restored ${messagesToInsert.length} messages`);
+//       }
+
+//       // 5. Update user profile (optional - restore profile pic, etc.)
+//       if (backupData.user.profilePic) {
+//         await User.findByIdAndUpdate(userId, {
+//           profilePic: backupData.user.profilePic
+//         });
+//       }
+
+//       res.json({
+//         success: true,
+//         message: "Backup restored successfully!",
+//         restored: {
+//           messages: backupData.messages?.length || 0,
+//           groups: backupData.groups?.length || 0,
+//           backupDate: backupData.backupDate
+//         }
+//       });
+
+//     } catch (restoreError) {
+//       console.error('❌ Restore operation failed:', restoreError);
+//       throw new Error(`Restore failed: ${restoreError.message}`);
+//     }
+
+//   } catch (err) {
+//     console.error("❌ Restore failed:", err);
+//     res.status(500).json({ 
+//       success: false,
+//       message: "Restore failed", 
+//       error: err.message 
+//     });
+//   }
+// });
+
+
+
+
+// 2️⃣ RESTORE BACKUP - Restore user data from Cloudinary backup
 app.post("/api/restore/:userId", authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2092,22 +2216,46 @@ app.post("/api/restore/:userId", authenticateToken, async (req, res) => {
       });
       console.log(`✅ Cleared ${groupDeleteResult.deletedCount} old groups`);
 
-      // 3. Restore groups (recreate with new IDs to avoid duplicates)
+      // 3. Restore groups with NEW zegoGroupId values to avoid duplicates
       if (backupData.groups && backupData.groups.length > 0) {
         const groupsToInsert = backupData.groups.map(group => {
-          // Remove _id to let MongoDB generate new ones
           const { _id, ...groupData } = group;
-          return groupData;
+          // 🔑 CRITICAL: Generate a NEW zegoGroupId to avoid unique constraint violation
+          return {
+            ...groupData,
+            zegoGroupId: `group_${new mongoose.Types.ObjectId()}`  // Generate new ID
+          };
         });
         
-        await Group.insertMany(groupsToInsert);
-        console.log(`✅ Restored ${groupsToInsert.length} groups`);
-      }
+        const insertedGroups = await Group.insertMany(groupsToInsert);
+        console.log(`✅ Restored ${insertedGroups.length} groups with new zegoGroupId values`);
 
-      // 4. Restore messages (recreate with new IDs to avoid duplicates)
-      if (backupData.messages && backupData.messages.length > 0) {
+        // Update messages that reference old group IDs to use new ones
+        // Create a mapping of old group IDs to new group IDs
+        const groupIdMap = {};
+        backupData.groups.forEach((oldGroup, index) => {
+          groupIdMap[oldGroup._id.toString()] = insertedGroups[index]._id.toString();
+        });
+
+        // 4. Restore messages with updated group references
+        if (backupData.messages && backupData.messages.length > 0) {
+          const messagesToInsert = backupData.messages.map(msg => {
+            const { _id, ...messageData } = msg;
+            // Update group reference if message belongs to a group
+            if (messageData.group && groupIdMap[messageData.group.toString()]) {
+              messageData.group = groupIdMap[messageData.group.toString()];
+            }
+            return messageData;
+          });
+          
+          if (messagesToInsert.length > 0) {
+            await Message.insertMany(messagesToInsert);
+          }
+          console.log(`✅ Restored ${messagesToInsert.length} messages with updated group references`);
+        }
+      } else if (backupData.messages && backupData.messages.length > 0) {
+        // If no groups, just restore messages as-is
         const messagesToInsert = backupData.messages.map(msg => {
-          // Remove _id to let MongoDB generate new ones
           const { _id, ...messageData } = msg;
           return messageData;
         });
@@ -2149,6 +2297,16 @@ app.post("/api/restore/:userId", authenticateToken, async (req, res) => {
     });
   }
 });
+
+
+
+
+
+
+
+
+
+
 
 
 // 3️⃣ GET BACKUP INFO - Check if backup exists
