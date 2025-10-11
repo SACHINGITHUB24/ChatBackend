@@ -535,68 +535,76 @@ app.post('/api/refreshZegoToken', async (req, res) => {
 // --- NEW CHAT/GROUP ROUTES ADDED TO FIX 404 ERROR ---
 
 // Fetch all users (for DMs, excluding current user)
-app.get('/api/users', authenticateToken, async (req, res) => {
-    try {
-        const users = await User.find({ _id: { $ne: req.user.userId } }).select('-password');
-        res.json(users);
-    } catch (err) {
-        console.error('❌ Error fetching users:', err);
-        res.status(500).json({ error: 'Failed to fetch users' });
-    }
-});
+// app.get('/api/users', authenticateToken, async (req, res) => {
+//     try {
+//         const users = await User.find({ _id: { $ne: req.user.userId } }).select('-password');
+//         res.json(users);
+//     } catch (err) {
+//         console.error('❌ Error fetching users:', err);
+//         res.status(500).json({ error: 'Failed to fetch users' });
+//     }
+// });
+
+
+
+
+
+
+
+
 
 // Fetch all groups a user belongs to
-app.get('/api/groups', authenticateToken, async (req, res) => {
-    try {
-        const groups = await Group.find({ members: req.user.userId }).populate('createdBy', 'username');
-        res.json(groups);
-    } catch (err) {
-        console.error('❌ Error fetching groups:', err);
-        res.status(500).json({ error: 'Failed to fetch groups' });
-    }
-});
+// app.get('/api/groups', authenticateToken, async (req, res) => {
+//     try {
+//         const groups = await Group.find({ members: req.user.userId }).populate('createdBy', 'username');
+//         res.json(groups);
+//     } catch (err) {
+//         console.error('❌ Error fetching groups:', err);
+//         res.status(500).json({ error: 'Failed to fetch groups' });
+//     }
+// });
 
 // Get messages for a specific group (FIXES THE 404 FOR /api/groups/:groupId/messages)
-app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
+// app.get('/api/groups/:groupId/messages', authenticateToken, async (req, res) => {
+//   try {
+//     const { groupId } = req.params;
+//     const limit = parseInt(req.query.limit) || 50;
+//     const offset = parseInt(req.query.offset) || 0;
 
-    // Check if group exists first
-    const group = await Group.findById(groupId);
-    if (!group) {
-        return res.status(404).json({ error: 'Group not found.' });
-    }
+//     // Check if group exists first
+//     const group = await Group.findById(groupId);
+//     if (!group) {
+//         return res.status(404).json({ error: 'Group not found.' });
+//     }
     
-    // Check if user is a member of the group
-    if (!group.members.includes(req.user.userId)) {
-        // NOTE: Depending on your security model, you might allow non-members to read history, but typically only members can.
-        // For now, we'll allow reading if the group exists.
-        // If strict security is needed: return res.status(403).json({ error: 'Not authorized to view this group\'s messages.' });
-    }
+//     // Check if user is a member of the group
+//     if (!group.members.includes(req.user.userId)) {
+//         // NOTE: Depending on your security model, you might allow non-members to read history, but typically only members can.
+//         // For now, we'll allow reading if the group exists.
+//         // If strict security is needed: return res.status(403).json({ error: 'Not authorized to view this group\'s messages.' });
+//     }
 
 
-    const messages = await Message.find({ group: groupId })
-      .sort({ timestamp: -1 }) // Sort by newest first
-      .limit(limit)
-      .skip(offset)
-      .populate('sender', 'username profilePic zegoUserId')
-      .exec();
+//     const messages = await Message.find({ group: groupId })
+//       .sort({ timestamp: -1 }) // Sort by newest first
+//       .limit(limit)
+//       .skip(offset)
+//       .populate('sender', 'username profilePic zegoUserId')
+//       .exec();
       
-    // Reverse the order for the client to display oldest at the top (standard chat view)
-    res.json(messages.reverse()); 
+//     // Reverse the order for the client to display oldest at the top (standard chat view)
+//     res.json(messages.reverse()); 
 
-  } catch (err) {
-    // If the groupId format is invalid (e.g., not a valid MongoDB ObjectId), Mongoose will throw a CastError.
-    // We catch that here and return a 404 or 400.
-    if (err.name === 'CastError') {
-         return res.status(400).json({ error: 'Invalid group ID format.' });
-    }
-    console.error('❌ Error fetching group messages:', err);
-    res.status(500).json({ error: 'Failed to fetch group messages' });
-  }
-});
+//   } catch (err) {
+//     // If the groupId format is invalid (e.g., not a valid MongoDB ObjectId), Mongoose will throw a CastError.
+//     // We catch that here and return a 404 or 400.
+//     if (err.name === 'CastError') {
+//          return res.status(400).json({ error: 'Invalid group ID format.' });
+//     }
+//     console.error('❌ Error fetching group messages:', err);
+//     res.status(500).json({ error: 'Failed to fetch group messages' });
+//   }
+// });
 
 
 // --- END NEW CHAT/GROUP ROUTES ---
