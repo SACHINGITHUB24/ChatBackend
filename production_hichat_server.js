@@ -2493,6 +2493,55 @@ app.post("/api/users/:userId/profile", cloudinaryUpload.single("image"), async (
 
 
 
+//First Admin without any error
+
+app.post('/api/admin/setup', async (req, res) => {
+  try {
+    // Check if ANY users exist
+    const userCount = await User.countDocuments();
+    if (userCount > 0) {
+      return res.status(403).json({ 
+        error: 'System already initialized. Cannot create admin.' 
+      });
+    }
+
+    const { name, username, email, password } = req.body;
+    
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({ error: 'All fields required' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const adminUser = new User({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      role: 'admin',
+      zegoUserId: `zego_admin_${new mongoose.Types.ObjectId()}`
+    });
+
+    await adminUser.save();
+
+    const token = jwt.sign(
+      { userId: adminUser._id, username: adminUser.username, role: 'admin' },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'Admin created successfully',
+      token,
+      user: { id: adminUser._id, username, role: 'admin' }
+    });
+  } catch (error) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: 'Setup failed' });
+  }
+});
+
+
 
 
 
